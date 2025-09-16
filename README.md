@@ -1,49 +1,63 @@
 # QVS-CBOM
 
-Quantum vulnerability scanner that generates CycloneDX-compliant CBOMs.
+Quantum vulnerability scanner that generates CycloneDX-compliant CBOMs and layers on top of existing tooling with zero workflow disruption.
 
-## Installation
-
-### Download
+## Quick Start (Docker Wrapper)
 ```bash
 git clone https://github.com/ppscon/CBOM.git
 cd CBOM
+docker build -t enhanced-scanner .
+
+# Run with the Docker socket mounted so CBOM can export image filesystems
+docker run -v /var/run/docker.sock:/var/run/docker.sock \
+  enhanced-scanner --CBOM image bkimminich/juice-shop:latest
 ```
 
-### Platform Setup
-```bash
-# Linux
-chmod +x qvs-cbom qvs-cbom-csv.sh wrapper.sh
+What happens:
+1. Trivy performs its standard vulnerability scan.
+2. The wrapper exports the target image using the bundled Docker CLI.
+3. `/qvs-cbom` prints a CycloneDX 1.4 CBOM highlighting quantum-risk cryptography.
 
-# Darwin/macOS
-chmod +x qvs-cbom-darwin qvs-cbom-csv.sh wrapper.sh
+See `DEMO-GUIDE.md` for a detailed walkthrough.
+
+## Scan Other Targets
+```bash
+# Different container image
+docker run -v /var/run/docker.sock:/var/run/docker.sock \
+  enhanced-scanner --CBOM image nginx:latest
+
+# Local directory (bind mount)
+docker run -v /host/path:/workspace \
+  enhanced-scanner --CBOM filesystem /workspace
+
+# Kubernetes namespace (kubectl configured on host)
+docker run -v /var/run/docker.sock:/var/run/docker.sock \
+  enhanced-scanner --CBOM kubernetes --namespace cbom
+
+# Override CBOM invocation (advanced)
+docker run -e CBOM_COMMAND_TEMPLATE='/qvs-cbom -mode file -dir /workspace -output-cbom' \
+  -v /host/path:/workspace \
+  enhanced-scanner --CBOM filesystem /workspace
 ```
 
-## Usage
-
+## Bare-Metal Usage (Optional)
 ```bash
-# Kubernetes cluster (Linux)
+# Make binaries executable
+chmod +x qvs-cbom qvs-cbom-darwin qvs-cbom-csv.sh wrapper.sh
+
+# Kubernetes (Linux)
 ./qvs-cbom -mode k8s -namespace default -output-cbom
 
-# Kubernetes cluster (Darwin/macOS)
-./qvs-cbom-darwin -mode k8s -namespace default -output-cbom
+# File system (macOS)
+./qvs-cbom-darwin -mode file -dir /path/to/scan -output-cbom
 
-# File system
-./qvs-cbom -mode file -dir /path/to/scan -output-cbom
-
-# CSV output
+# CSV conversion helper
 ./qvs-cbom-csv.sh input.json --output report.csv
 ```
 
-## Docker Integration
+## Maintenance & Troubleshooting
+- **No space left on device**: prune Docker resources (`docker system prune`) or mount a larger cache (`-v $HOME/.cache/trivy:/root/.cache/trivy`).
+- **Private registries**: authenticate with `docker login` before running the wrapper.
+- **Custom workflows**: set `CBOM_COMMAND_TEMPLATE`; the original scanner arguments are available in `$CBOM_ORIGINAL_ARGS` for scripting.
 
-```bash
-# Mount binaries and wrapper
-docker run -v ./wrapper.sh:/wrapper.sh -v ./qvs-cbom:/qvs-cbom \
-  aquasec/trivy --cbom image nginx:latest
-
-# Or build enhanced scanner
-docker build -t enhanced-scanner .
-docker run enhanced-scanner --cbom image nginx:latest
-```
-
+The enhanced wrapper demonstrates how QVS-CBOM augments existing scanners without disrupting operator workflows.

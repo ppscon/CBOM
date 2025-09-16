@@ -11,3 +11,9 @@ test_*
 # OS
 .DS_Store
 Thumbs.db
+
+# Documentation (managed outside the repo)
+docs/
+
+# IDE
+.idea/
