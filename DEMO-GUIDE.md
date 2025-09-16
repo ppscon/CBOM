@@ -52,4 +52,4 @@ docker network prune
   ```
 - **Private image**: log in first (`docker login`) so Trivy can pull it.
 
-You now have a reproducible demo that proves QVS-CBOM integrates with existing scanners and highlights weak cryptography.
+the demo can integrate with existing scanners and highlights weak cryptography.
