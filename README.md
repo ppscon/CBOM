@@ -20,6 +20,9 @@ What happens:
 
 See `DEMO-GUIDE.md` for a detailed walkthrough.
 
+## Demo Script
+Run `./demo.sh juice` to scan the Juice Shop demo or `./demo.sh k8s` to scan the demo namespace. Use `./demo.sh --help` for options.
+
 ## Scan Other Targets
 ```bash
 # Different container image
