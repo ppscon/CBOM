@@ -1,73 +1,83 @@
-#!/bin/bash
-# QVS-CBOM CSV Output Wrapper
-# Usage: ./qvs-cbom-csv.sh <target> [--output filename.csv]
+#!/bin/sh
+# QVS-CBOM CSV Output Helper (self-contained)
+# Usage:
+#  - Convert existing JSON: ./qvs-cbom-csv.sh input.json --output report.csv
+#  - Scan a directory and convert: ./qvs-cbom-csv.sh /path/to/dir --output report.csv
+set -eu
 
-set -e
-
-TARGET="$1"
+TARGET="${1:-}"
 OUTPUT_FILE=""
 
-# Parse arguments
-shift
-while [[ $# -gt 0 ]]; do
-    case $1 in
+if [ -z "$TARGET" ]; then
+    echo "Usage: $0 <input.json|directory> [--output filename.csv]"
+    exit 1
+fi
+
+shift || true
+while [ $# -gt 0 ]; do
+    case "$1" in
         --output)
             OUTPUT_FILE="$2"
-            shift 2
+            shift 2 || true
             ;;
         *)
-            shift
+            shift || true
             ;;
     esac
 done
 
-if [ -z "$TARGET" ]; then
-    echo "Usage: $0 <target> [--output filename.csv]"
-    echo "Examples:"
-    echo "  $0 test-app.py --output report.csv"
-    echo "  $0 nginx:latest --output container-report.csv"
-    exit 1
-fi
+# Helper: convert JSON (file path provided) to CSV using Python
+convert_json_to_csv() {
+    JSON_FILE="$1"
+    [ -n "${OUTPUT_FILE:-}" ] || OUTPUT_FILE="${JSON_FILE%.json}.csv"
+    python3 - "$JSON_FILE" <<'PY'
+import json, sys
+json_path = sys.argv[1]
+with open(json_path, 'r') as f:
+    data = json.load(f)
+print('File,Algorithm,Type,Risk,Vulnerability,Description,Recommendation,NIST_Category,Security_Strength')
+findings = data.get('findings') or []
+for finding in findings:
+    row = [
+        (finding.get('file') or '').replace(',', ';'),
+        finding.get('algorithm') or '',
+        finding.get('type') or '',
+        finding.get('risk') or '',
+        (finding.get('vulnerability_type') or '').replace(',', ';'),
+        (finding.get('description') or '').replace(',', ';'),
+        (finding.get('recommendation') or '').replace(',', ';'),
+        str(finding.get('nist_category') or ''),
+        str(finding.get('security_strength') or '')
+    ]
+    print(','.join('"%s"' % v for v in row))
+PY
+}
 
-# Generate CBOM JSON
-JSON_OUTPUT=$(./qvs-cbom -mode file -dir "$TARGET" -output-cbom 2>/dev/null)
-
-# Convert to CSV using Python
-CSV_OUTPUT=$(python3 -c "
-import json
-import sys
-
-try:
-    data = json.loads('''$JSON_OUTPUT''')
-    
-    # Print CSV header
-    print('File,Algorithm,Type,Risk,Vulnerability,Description,Recommendation,NIST_Category,Security_Strength')
-    
-    # Print findings
-    for finding in data.get('findings', []):
-        row = [
-            finding.get('file', '').replace(',', ';'),
-            finding.get('algorithm', ''),
-            finding.get('type', ''),
-            finding.get('risk', ''),
-            finding.get('vulnerability_type', '').replace(',', ';'),
-            finding.get('description', '').replace(',', ';'),
-            finding.get('recommendation', '').replace(',', ';'),
-            finding.get('nist_category', ''),
-            str(finding.get('security_strength', ''))
-        ]
-        print(','.join(['\"' + str(field) + '\"' for field in row]))
-        
-except Exception as e:
-    print('Error converting to CSV:', e, file=sys.stderr)
-    sys.exit(1)
-")
-
-# Output to file or stdout
-if [ -n "$OUTPUT_FILE" ]; then
-    echo "$CSV_OUTPUT" > "$OUTPUT_FILE"
+# Case 1: input is a JSON file
+if [ -f "$TARGET" ] && [ "${TARGET##*.}" = "json" ]; then
+    convert_json_to_csv "$TARGET" > "$OUTPUT_FILE"
     echo "✓ CSV report saved to: $OUTPUT_FILE"
-    echo "  Found $(echo "$CSV_OUTPUT" | wc -l | tr -d ' ') vulnerabilities (including header)"
-else
-    echo "$CSV_OUTPUT"
+    exit 0
 fi
+
+# Case 2: input is a directory -> run scanner and convert
+if [ -d "$TARGET" ] || [ -f "$TARGET" ]; then
+    CBOM_TMP="$(mktemp -t cbom-XXXXXX.json)"
+    set +e
+    CBOM_JSON="$(./qvs-cbom -mode file -dir "$TARGET" -output-cbom 2>/dev/null)"
+    SCAN_EXIT=$?
+    set -e
+    if [ $SCAN_EXIT -ne 0 ] || [ -z "$CBOM_JSON" ]; then
+        echo "Failed to generate CBOM for: $TARGET" >&2
+        exit 1
+    fi
+    printf '%s\n' "$CBOM_JSON" > "$CBOM_TMP"
+    [ -n "${OUTPUT_FILE:-}" ] || OUTPUT_FILE="report.csv"
+    convert_json_to_csv "$CBOM_TMP" > "$OUTPUT_FILE"
+    rm -f "$CBOM_TMP"
+    echo "✓ CSV report saved to: $OUTPUT_FILE"
+    exit 0
+fi
+
+echo "Error: Target not found or unsupported: $TARGET" >&2
+exit 1

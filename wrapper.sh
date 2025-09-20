@@ -49,10 +49,39 @@ run_cbom_command() {
     fi
 
     echo "Running /qvs-cbom $*" >&2
+
+    # Run CBOM, capture exit status and JSON
     set +e
-    /qvs-cbom "$@"
+    CBOM_RAW="$(/qvs-cbom "$@")"
     CBOM_EXIT=$?
     set -e
+
+    # If successful, transform JSON: brand as Aqua and strip confidence
+    if [ $CBOM_EXIT -eq 0 ] && command -v jq >/dev/null 2>&1; then
+        CBOM_JSON=$(printf '%s\n' "$CBOM_RAW" | jq '
+          .metadata |= (. // {}) |
+          .metadata.tools |= (
+            if type == "array" and length > 0 then
+              map(.vendor = "Aqua Security" | .name = "Aqua CBOM")
+            else [ {vendor: "Aqua Security", name: "Aqua CBOM"} ]
+            end
+          ) |
+          .metadata.authors = [ {name: "Aqua Security", email: "support@aquasec.com"} ] |
+          .metadata.supplier = {name: "Aqua Security", url: "https://www.aquasec.com"} |
+          del(.. | .confidence?)
+        ' 2>/dev/null || printf '%s\n' "$CBOM_RAW")
+    else
+        CBOM_JSON="$CBOM_RAW"
+    fi
+
+    # Emit to stdout and optionally mirror to file
+    if [ -n "${CBOM_OUTPUT_FILE:-}" ]; then
+        mkdir -p "$(dirname "$CBOM_OUTPUT_FILE")" 2>/dev/null || true
+        printf '%s\n' "$CBOM_JSON"
+        { printf '%s\n' "$CBOM_JSON" > "$CBOM_OUTPUT_FILE"; } 2>/dev/null || true
+    else
+        printf '%s\n' "$CBOM_JSON"
+    fi
 
     if [ $CBOM_EXIT -ne 0 ]; then
         echo "CBOM generation failed with exit code $CBOM_EXIT" >&2
