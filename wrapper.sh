@@ -50,8 +50,9 @@ run_cbom_command() {
 
     echo "Running /qvs-cbom $*" >&2
     # Capture CBOM JSON to allow post-processing of summary fields
-    tmp_raw=$(mktemp /tmp/cbom-raw-XXXXXX.json)
-    tmp_json=$(mktemp /tmp/cbom-fixed-XXXXXX.json)
+    # BusyBox mktemp doesn't support suffixes; use -p and no extension
+    tmp_raw=$(mktemp -p /tmp cbom-raw-XXXXXX)
+    tmp_json=$(mktemp -p /tmp cbom-fixed-XXXXXX)
 
     set +e
     /qvs-cbom "$@" >"$tmp_raw"
@@ -63,7 +64,7 @@ run_cbom_command() {
     fi
 
     # Try to extract pure JSON in case any non-JSON logs were printed
-    tmp_extracted=$(mktemp /tmp/cbom-extracted-XXXXXX.json)
+    tmp_extracted=$(mktemp -p /tmp cbom-extracted-XXXXXX)
     if sed -n '/^{/,/^}/p' "$tmp_raw" >"$tmp_extracted" && jq empty "$tmp_extracted" >/dev/null 2>&1; then
         mv "$tmp_extracted" "$tmp_raw"
     else
