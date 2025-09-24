@@ -49,43 +49,50 @@ run_cbom_command() {
     fi
 
     echo "Running /qvs-cbom $*" >&2
+    # Capture CBOM JSON to allow post-processing of summary fields
+    tmp_raw=$(mktemp /tmp/cbom-raw-XXXXXX.json)
+    tmp_json=$(mktemp /tmp/cbom-fixed-XXXXXX.json)
 
-    # Run CBOM, capture exit status and JSON
     set +e
-    CBOM_RAW="$(/qvs-cbom "$@")"
+    /qvs-cbom "$@" >"$tmp_raw"
     CBOM_EXIT=$?
     set -e
-
-    # If successful, transform JSON: brand as Aqua and strip confidence
-    if [ $CBOM_EXIT -eq 0 ] && command -v jq >/dev/null 2>&1; then
-        CBOM_JSON=$(printf '%s\n' "$CBOM_RAW" | jq '
-          .metadata |= (. // {}) |
-          .metadata.tools |= (
-            if type == "array" and length > 0 then
-              map(.vendor = "Aqua Security" | .name = "Aqua CBOM")
-            else [ {vendor: "Aqua Security", name: "Aqua CBOM"} ]
-            end
-          ) |
-          .metadata.authors = [ {name: "Aqua Security", email: "support@aquasec.com"} ] |
-          .metadata.supplier = {name: "Aqua Security", url: "https://www.aquasec.com"} |
-          del(.. | .confidence?)
-        ' 2>/dev/null || printf '%s\n' "$CBOM_RAW")
-    else
-        CBOM_JSON="$CBOM_RAW"
-    fi
-
-    # Emit to stdout and optionally mirror to file
-    if [ -n "${CBOM_OUTPUT_FILE:-}" ]; then
-        mkdir -p "$(dirname "$CBOM_OUTPUT_FILE")" 2>/dev/null || true
-        printf '%s\n' "$CBOM_JSON"
-        { printf '%s\n' "$CBOM_JSON" > "$CBOM_OUTPUT_FILE"; } 2>/dev/null || true
-    else
-        printf '%s\n' "$CBOM_JSON"
-    fi
 
     if [ $CBOM_EXIT -ne 0 ]; then
         echo "CBOM generation failed with exit code $CBOM_EXIT" >&2
     fi
+
+    # Try to extract pure JSON in case any non-JSON logs were printed
+    tmp_extracted=$(mktemp /tmp/cbom-extracted-XXXXXX.json)
+    if sed -n '/^{/,/^}/p' "$tmp_raw" >"$tmp_extracted" && jq empty "$tmp_extracted" >/dev/null 2>&1; then
+        mv "$tmp_extracted" "$tmp_raw"
+    else
+        rm -f "$tmp_extracted" 2>/dev/null || true
+    fi
+
+    # Recompute summary.quantum_safe_assets from finding-level flags when possible
+    if jq empty "$tmp_raw" >/dev/null 2>&1; then
+        if ! jq '
+          def safe_count: ([.findings[]? | select(.quantum_resistant==true)] | length);
+          .summary = (.summary // {})
+          | .summary.quantum_safe_assets = safe_count
+        ' "$tmp_raw" >"$tmp_json" 2>/dev/null; then
+            cp "$tmp_raw" "$tmp_json"
+        fi
+    else
+        cp "$tmp_raw" "$tmp_json"
+    fi
+
+    # Persist to file if requested
+    if [ -n "${CBOM_OUTPUT_FILE:-}" ]; then
+        cp "$tmp_json" "$CBOM_OUTPUT_FILE" 2>/dev/null || true
+        echo "CBOM written to ${CBOM_OUTPUT_FILE}" >&2
+    fi
+
+    # Emit corrected JSON to stdout (preserves previous behavior of printing CBOM)
+    cat "$tmp_json"
+
+    rm -f "$tmp_raw" "$tmp_json" 2>/dev/null || true
 }
 
 extract_image_rootfs() {
