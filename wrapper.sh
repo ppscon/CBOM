@@ -84,6 +84,45 @@ run_cbom_command() {
         cp "$tmp_raw" "$tmp_json"
     fi
 
+    # Optional: up-level to CycloneDX 1.6 and inject CBOM properties using component.properties
+    if [ "${CBOM_CDX_TARGET:-}" = "1.6" ] || [ "${CBOM_UPLEVEL_16:-}" = "true" ]; then
+        tmp_16=$(mktemp -p /tmp cbom-16-XXXXXX)
+        if jq '
+          def primitive_of($alg):
+            ( ($alg | tostring | ascii_upcase) as $A |
+              if   ($A|startswith("MD5") or $A|startswith("SHA")) then "hash"
+              elif ($A|startswith("AES") or ($A|contains("BLAKE"))) then "blockcipher"
+              elif ($A|startswith("RSA") or $A|startswith("ECDSA") or $A|startswith("ECDH")) then "asymmetric"
+              else "unknown" end );
+
+          .specVersion = "1.6" |
+          # Build variant index from findings (file+algorithm -> nist_algorithm_id)
+          ( [ .findings[]? | select(.nist_algorithm_id? != null) | {key: ((.file|tostring) + "|" + ((.algorithm // "")|tostring)), value: (.nist_algorithm_id|tostring)} ]
+            | from_entries ) as $varidx |
+          ((.metadata.tools[0].name // "") | tostring) as $scannerName |
+
+          (.components // []) as $comps |
+          .components = ($comps | map(
+            if (.crypto? != null) then
+              .properties = ((.properties // []) + [
+                {"name":"cbom:algorithm","value":((.crypto.algorithm // "")|tostring)},
+                {"name":"cbom:purpose","value":((.crypto.purpose // "")|tostring)},
+                {"name":"cbom:quantumRisk","value":((.crypto.quantumRisk // "")|tostring)},
+                {"name":"cbom:quantumSafe","value":((.crypto.quantumSafe // false) | tostring)},
+                {"name":"cbom:primitive","value":(primitive_of(.crypto.algorithm // ""))},
+                {"name":"cbom:variant","value":($varidx[(.name|tostring) + "|" + ((.crypto.algorithm // "")|tostring)] // ((.crypto.algorithm // "")|tostring))},
+                {"name":"cbom:scanner","value":$scannerName},
+                {"name":"cbom:detectionContext:filePath","value":((.name // "")|tostring)}
+              ])
+            else . end
+          ))
+        ' "$tmp_json" >"$tmp_16" 2>/dev/null; then
+            mv "$tmp_16" "$tmp_json"
+        else
+            rm -f "$tmp_16" 2>/dev/null || true
+        fi
+    fi
+
     # Persist to file if requested
     if [ -n "${CBOM_OUTPUT_FILE:-}" ]; then
         cp "$tmp_json" "$CBOM_OUTPUT_FILE" 2>/dev/null || true
