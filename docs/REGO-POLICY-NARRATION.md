@@ -12,13 +12,13 @@ This document provides a narrative explanation of how the REGO policy (`fips-com
 
 **The Solution**: We combine three complementary components:
 1. **QVS-CBOM Scanner** - Detects and identifies cryptographic algorithms, their risk levels, and quantum vulnerability
-2. **REGO Policy** (OPA-based) - Enforces organizational compliance rules against the CBOM data
-3. **Terraform Policies** (Aqua native) - Controls deployment and runtime based on REGO decisions
+2. **REGO Policy** (OPA-based) - Enforces organizational compliance rules against the CBOM data in CI/CD
+3. **Aqua Assurance Policies** - Controls deployment and runtime security (configured as code via Terraform)
 
 Think of it as a three-layer defense:
 - **QVS-CBOM = The Detective** - Finds and identifies all cryptographic algorithms with risk assessments
-- **REGO = The Gate** - Static analysis that provides GO/NO-GO decision based on your organization's rules
-- **Terraform = The Guard** - Separately enforces runtime security controls and deployment policies in Aqua platform
+- **REGO = The CI/CD Gate** - Static analysis that provides GO/NO-GO decision based on your organization's rules
+- **Aqua = The Guard** - Multi-stage enforcement (Image Assurance, Kubernetes Admission Control, Runtime Protection)
 
 ---
 
@@ -26,7 +26,7 @@ Think of it as a three-layer defense:
 
 ### The Workflow
 
-**Note**: Terraform policies (fips-compliance-policies.tf) are configuration-as-code - they define the rules in Aqua once, then Aqua enforces them automatically.
+**Note**: Terraform (fips-compliance-policies.tf) is simply infrastructure-as-code for configuring Aqua policies with change control. The actual enforcement is done entirely by **Aqua Security Platform**.
 
 ```
 Container Image (in CI/CD pipeline)
@@ -92,7 +92,7 @@ Container Image (in CI/CD pipeline)
     → Action: Alert or Block on policy violations
 ```
 
-**Terraform's Role**: The .tf files define all these policies once. After `terraform apply`, Aqua enforces them automatically at each stage.
+**Terraform's Role**: The .tf files are just infrastructure-as-code to configure Aqua policies with version control. After `terraform apply`, **Aqua** enforces them automatically at each stage.
 
 ---
 
@@ -476,23 +476,26 @@ FIPS 140-3 adopts ISO/IEC 19790 and 24759 standards, providing international rec
 
 ## Part 5: Summary - Division of Responsibilities
 
-| Layer | QVS-CBOM | REGO | Terraform |
-|-------|----------|------|-----------|
+| Layer | QVS-CBOM | REGO | Aqua Security |
+|-------|----------|------|---------------|
 | **Detects Algorithms** | ✅ Scans code/binaries | ❌ | ❌ |
 | **Assesses Risk** | ✅ NIST analysis | ❌ | ❌ |
 | **Quantum Analysis** | ✅ Identifies vulnerable algos | ❌ | ❌ |
 | **Provides Recommendations** | ✅ Expert guidance | ❌ | ❌ |
-| **Enforces Org Rules** | ❌ | ✅ Custom policies | ❌ |
+| **Enforces Org Rules (CI/CD)** | ❌ | ✅ Custom policies | ❌ |
 | **Context-Aware Decisions** | ❌ | ✅ Business logic | ❌ |
 | **Exception Handling** | ❌ | ✅ Namespace/label-based | ❌ |
-| **Blocks Deployment** | ❌ | ❌ | ✅ CI/CD gates |
+| **Image Assurance** | ❌ | ❌ | ✅ Vulnerability/CIS scans |
+| **Blocks Deployment** | ❌ | ❌ | ✅ Kubernetes Admission Control |
 | **Runtime Monitoring** | ❌ | ❌ | ✅ File/process monitoring |
-| **Kubernetes Controls** | ❌ | ❌ | ✅ Pod security |
+| **Kubernetes Controls** | ❌ | ❌ | ✅ Pod security enforcement |
 
 **Key Insight**:
 - **QVS-CBOM** = Expert cryptographer that finds and assesses everything
-- **REGO** = CI/CD quality gate that enforces YOUR organization's rules
-- **Aqua Platform** (configured via Terraform) = Multi-stage enforcer (Image Assurance, K8s Admission, Runtime Protection)
+- **REGO** = CI/CD quality gate that enforces YOUR organization's custom rules
+- **Aqua Security** = The compliance enforcer across the entire container lifecycle (Image → Deploy → Runtime)
+
+**Note**: Terraform is just the configuration-as-code tool for managing Aqua policies with change control - it's not an enforcement layer.
 
 ---
 
@@ -662,7 +665,7 @@ $ opa eval --data fips-compliance-cdx16.rego --input cbom.json 'data.fips_compli
 
 ### QVS-CBOM Alone Is Not Enough
 
-**Without REGO and Terraform**, QVS-CBOM can only *report* findings - it cannot *enforce* compliance:
+**Without REGO and Aqua**, QVS-CBOM can only *report* findings - it cannot *enforce* compliance:
 
 ```json
 {
@@ -685,7 +688,7 @@ QVS-CBOM detects MD5 and generates a detailed report. But without enforcement:
 
 ### REGO Alone Is Not Enough
 
-**Without Aqua/Terraform policies**, REGO only provides CI/CD gating - no runtime or deployment-time protection:
+**Without Aqua policies**, REGO only provides CI/CD gating - no runtime or deployment-time protection:
 
 ```bash
 $ opa eval --data policy.rego --input cbom.json 'data.fips.deny'
@@ -740,18 +743,18 @@ A container runs as non-root, has read-only filesystem, no host network access -
 ## Part 9: Key Talking Points for Your Meeting
 
 ### Opening Statement
-"We've implemented a three-layer FIPS 140-3 compliance system. QVS-CBOM provides expert cryptographic detection and risk assessment - it finds every algorithm and tells us what's weak. REGO provides the policy decision layer - it applies our organization's specific compliance rules to those findings. Terraform provides the enforcement - it blocks non-compliant images and monitors runtime. Together, they create an automated compliance pipeline that catches violations before they reach production."
+"We've implemented a three-layer FIPS 140-3 compliance system. QVS-CBOM provides expert cryptographic detection and risk assessment - it finds every algorithm and tells us what's weak. REGO provides the policy decision layer in CI/CD - it applies our organization's specific compliance rules to those findings. Aqua Security provides the enforcement across the entire container lifecycle - it blocks non-compliant images, controls deployment, and monitors runtime. Together, they create an automated compliance pipeline that catches violations before they reach production."
 
 ### Technical Highlights
 
 **Point 1: Automated Compliance**
-"Previously, FIPS compliance required manual code audits and penetration testing. Now, QVS-CBOM automatically scans every image and identifies all cryptographic usage with expert-level NIST analysis. REGO then applies our organization's specific compliance rules to those findings. Terraform enforces the decisions by blocking non-compliant images at the pipeline stage. This shifts security left - catching issues in CI/CD instead of production."
+"Previously, FIPS compliance required manual code audits and penetration testing. Now, QVS-CBOM automatically scans every image and identifies all cryptographic usage with expert-level NIST analysis. REGO then applies our organization's specific compliance rules to those findings in CI/CD. Aqua enforces the decisions by blocking non-compliant images at multiple stages - Image Assurance, Kubernetes Admission Control, and Runtime Protection. This shifts security left - catching issues in CI/CD instead of production."
 
 **Point 2: Future-Proof with Quantum Risk (FIPS 140-3 Advantage)**
 "QVS-CBOM doesn't just validate today's compliance - it flags algorithms that will become vulnerable to quantum computers. This aligns perfectly with FIPS 140-3's forward-looking provisions for post-quantum cryptography. REGO lets us set different policies for quantum risk versus immediate risk. For example, we can block MD5 today (already broken) but just warn about RSA-2048 (quantum-vulnerable in 10 years). This gives us a runway to plan migrations to post-quantum cryptography as NIST approves new algorithms under 140-3."
 
 **Point 3: Zero-Trust Architecture**
-"The Terraform runtime policies enforce zero-trust principles. Even if a FIPS-compliant image is deployed, we continuously monitor it for tampering attempts - file modifications, package installations, privilege escalations. If someone tries to inject non-FIPS crypto at runtime, we detect and block it immediately."
+"Aqua's runtime policies enforce zero-trust principles. Even if a FIPS-compliant image is deployed, we continuously monitor it for tampering attempts - file modifications, package installations, privilege escalations. If someone tries to inject non-FIPS crypto at runtime, Aqua detects and blocks it immediately."
 
 **Point 4: Audit Trail and Compliance Reporting**
 "Every CBOM is stored as a CycloneDX JSON file - an industry-standard format. Auditors can review our cryptographic inventory, trace violations back to specific commits, and verify that our enforcement is consistent. The REGO policy itself is version-controlled, so we have an audit trail of our compliance rules."
@@ -777,7 +780,9 @@ A container runs as non-root, has read-only filesystem, no host network access -
 **The Partnership**:
 - **QVS-CBOM** = The Expert Cryptographer - finds and assesses all cryptographic usage
 - **REGO** = The CI/CD Gatekeeper - enforces your organization's compliance rules in the pipeline
-- **Aqua Platform** (configured via Terraform) = The Multi-Layer Guard - enforces deployment and runtime controls
+- **Aqua Security** = The Multi-Layer Guard - enforces compliance across the entire container lifecycle (Image → Deploy → Runtime)
+
+**Note**: Terraform is just the infrastructure-as-code tool for managing Aqua policy configuration with version control and change management.
 
 **The Result**:
 Automated, continuous, defense-in-depth FIPS 140-3 compliance that protects at build time, deploy time, and runtime - with full audit trails and future quantum readiness. Our solution is positioned for the September 2026 transition deadline when FIPS 140-2 certificates become historical.
