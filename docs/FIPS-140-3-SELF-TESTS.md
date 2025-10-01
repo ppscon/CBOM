@@ -40,7 +40,7 @@ FIPS 140-3 introduces enhanced self-testing requirements that differ significant
 
 ### POST in Container Environments
 
-**QVS-CBOM Support**:
+**Aqua-CBOM Support**:
 - **File Integrity Monitoring**: Aqua runtime policy monitors FIPS module files
   - `/usr/lib64/openssl/engines/fips.so` (OpenSSL FIPS provider)
   - `/proc/sys/crypto/fips_enabled` (kernel FIPS flag)
@@ -97,9 +97,9 @@ file_integrity_monitoring {
 | **Efficiency** | Lower | Higher |
 | **Coverage** | Complete upfront | Complete when used |
 
-### QVS-CBOM and Conditional Tests
+### Aqua-CBOM and Conditional Tests
 
-**How QVS-CBOM Helps**:
+**How Aqua-CBOM Helps**:
 
 1. **Algorithm Inventory**: CBOM identifies which algorithms are actually used
    ```json
@@ -213,7 +213,7 @@ cat /proc/sys/crypto/fips_enabled
 **Method 1: CBOM Algorithm Inventory**
 ```bash
 # Generate CBOM
-./qvs-cbom-darwin -mode file -dir /app -output-cbom > cbom.json
+./aqua-cbom-darwin -mode file -dir /app -output-cbom > cbom.json
 
 # Extract algorithms
 jq '.components[] | select(.crypto) | .crypto.algorithm' cbom.json
@@ -321,12 +321,12 @@ FIPS 140-3 self-testing represents a significant improvement over 140-2:
 | Requirement | How We Comply |
 |-------------|---------------|
 | **POST** | Aqua file integrity monitoring + OS FIPS modules |
-| **Conditional Self-Tests** | QVS-CBOM algorithm inventory + FIPS module native support |
+| **Conditional Self-Tests** | Aqua-CBOM algorithm inventory + FIPS module native support |
 | **Integrity Verification** | Aqua runtime policy + read-only containers |
 | **Audit Trail** | CBOM + Aqua logs + REGO policy results |
 
 **Key Takeaway**: Our solution aligns perfectly with FIPS 140-3 requirements by combining:
-- **QVS-CBOM**: Identifies what algorithms are used
+- **Aqua-CBOM**: Identifies what algorithms are used
 - **REGO**: Validates only approved algorithms present
 - **Aqua**: Monitors module integrity and enforces runtime controls
 - **FIPS Modules**: Provide native POST and Conditional Self-Test capability

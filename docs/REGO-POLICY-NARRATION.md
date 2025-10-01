@@ -11,12 +11,12 @@ This document provides a narrative explanation of how the REGO policy (`fips-com
 **The Problem**: Traditional security policies can enforce *where* and *how* containers run, but they cannot deeply inspect *what cryptographic algorithms* are embedded in your application code.
 
 **The Solution**: We combine three complementary components:
-1. **QVS-CBOM Scanner** - Detects and identifies cryptographic algorithms, their risk levels, and quantum vulnerability
+1. **Aqua-CBOM Scanner** - Detects and identifies cryptographic algorithms, their risk levels, and quantum vulnerability
 2. **REGO Policy** (OPA-based) - Enforces organizational compliance rules against the CBOM data in CI/CD
 3. **Aqua Assurance Policies** - Controls deployment and runtime security (configured as code via Terraform)
 
 Think of it as a three-layer defense:
-- **QVS-CBOM = The Detective** - Finds and identifies all cryptographic algorithms with risk assessments
+- **Aqua-CBOM = The Detective** - Finds and identifies all cryptographic algorithms with risk assessments
 - **REGO = The CI/CD Gate** - Static analysis that provides GO/NO-GO decision based on your organization's rules
 - **Aqua = The Guard** - Multi-stage enforcement (Image Assurance, Kubernetes Admission Control, Runtime Protection)
 
@@ -42,14 +42,14 @@ Container Image (in CI/CD pipeline)
     → Decision: PASS or FAIL
     → If FAIL: Pipeline stops here
     ↓
-2. If Aqua Scanner PASSES: QVS-CBOM Job starts
+2. If Aqua Scanner PASSES: Aqua-CBOM Job starts
     → Triggered by: Previous job success
     → Docker command: enhanced-scanner --CBOM image <image:tag>
     → Process:
       a) Trivy scan runs first (base scanner)
       b) Wrapper intercepts --CBOM flag
       c) Extracts container filesystem
-      d) QVS-CBOM scans for cryptographic algorithms
+      d) Aqua-CBOM scans for cryptographic algorithms
     → Identifies: MD5, SHA1, AES, RSA, etc.
     → Assesses: Risk level (High/Medium/Low)
     → Evaluates: Quantum vulnerability (true/false)
@@ -158,11 +158,11 @@ But they CANNOT:
 
 ---
 
-## Part 2: QVS-CBOM Scanner - The Detection Layer
+## Part 2: Aqua-CBOM Scanner - The Detection Layer
 
-### What QVS-CBOM Does
+### What Aqua-CBOM Does
 
-QVS-CBOM is the **cryptographic detective** that scans your container images and generates a complete inventory of cryptographic usage.
+Aqua-CBOM is the **cryptographic detective** that scans your container images and generates a complete inventory of cryptographic usage.
 
 **Key Capabilities**:
 
@@ -195,7 +195,7 @@ QVS-CBOM is the **cryptographic detective** that scans your container images and
    - Machine-readable for automation
    - Human-readable for audits
 
-**Important**: QVS-CBOM already knows what's weak and what's not. It provides expert-level cryptographic analysis out of the box.
+**Important**: Aqua-CBOM already knows what's weak and what's not. It provides expert-level cryptographic analysis out of the box.
 
 ---
 
@@ -203,11 +203,11 @@ QVS-CBOM is the **cryptographic detective** that scans your container images and
 
 ### What REGO Does
 
-The REGO policy is a **static analysis gate** that evaluates the CBOM findings from QVS-CBOM and makes a GO/NO-GO decision for your CI/CD pipeline.
+The REGO policy is a **static analysis gate** that evaluates the CBOM findings from Aqua-CBOM and makes a GO/NO-GO decision for your CI/CD pipeline.
 
 **Critical Distinction**:
-- ❌ REGO does NOT detect algorithms (QVS-CBOM does that)
-- ❌ REGO does NOT assess risk levels (QVS-CBOM does that)
+- ❌ REGO does NOT detect algorithms (Aqua-CBOM does that)
+- ❌ REGO does NOT assess risk levels (Aqua-CBOM does that)
 - ❌ REGO does NOT block deployments (it just fails the CI/CD pipeline)
 - ✅ REGO DOES evaluate CBOM against your organization's rules
 - ✅ REGO DOES provide GO/NO-GO decision (exit 0 or exit 1)
@@ -217,7 +217,7 @@ The REGO policy is a **static analysis gate** that evaluates the CBOM findings f
 
 ### What REGO Actually Does: Organizational Policy Enforcement
 
-**Example Scenario**: QVS-CBOM finds MD5 in your image and reports:
+**Example Scenario**: Aqua-CBOM finds MD5 in your image and reports:
 ```json
 {
   "algorithm": "MD5",
@@ -258,7 +258,7 @@ get_algorithm(component) = algo if {
 ```
 
 **Narration**:
-"The REGO policy is smart enough to read CBOM data in both the legacy CycloneDX 1.4 format and the new 1.6 format. This ensures we can enforce policies regardless of which CBOM version QVS-CBOM generates. It first tries to read from the `.crypto` object (1.4 format), and if that doesn't exist, it falls back to the `.properties` array (1.6 format)."
+"The REGO policy is smart enough to read CBOM data in both the legacy CycloneDX 1.4 format and the new 1.6 format. This ensures we can enforce policies regardless of which CBOM version Aqua-CBOM generates. It first tries to read from the `.crypto` object (1.4 format), and if that doesn't exist, it falls back to the `.properties` array (1.6 format)."
 
 ---
 
@@ -268,7 +268,7 @@ get_algorithm(component) = algo if {
 
 **The Need**: Your organization may have different requirements than NIST defaults.
 
-**QVS-CBOM says**: "RSA-2048 is quantum-vulnerable (risk: Medium)"
+**Aqua-CBOM says**: "RSA-2048 is quantum-vulnerable (risk: Medium)"
 
 **Your organization decides**: "We accept RSA-2048 for 2 more years during our migration"
 
@@ -293,7 +293,7 @@ violations[msg] {
 ```
 
 **Narration**:
-"QVS-CBOM provides the expert cryptographic analysis - it tells you what's risky and why. REGO lets you define YOUR organization's acceptance criteria. Maybe you're more strict than NIST, or maybe you need exceptions during a migration period. REGO enforces YOUR rules, not just generic standards."
+"Aqua-CBOM provides the expert cryptographic analysis - it tells you what's risky and why. REGO lets you define YOUR organization's acceptance criteria. Maybe you're more strict than NIST, or maybe you need exceptions during a migration period. REGO enforces YOUR rules, not just generic standards."
 
 **Note**: This runs in CI/CD, completely separate from Aqua's Image Assurance. If REGO fails, the image never reaches the registry where Aqua Image Assurance would scan it.
 
@@ -301,7 +301,7 @@ violations[msg] {
 
 **The Need**: Not all uses of an algorithm are equal.
 
-**QVS-CBOM says**: "MD5 found in /app/etag-generator.js (risk: High)"
+**Aqua-CBOM says**: "MD5 found in /app/etag-generator.js (risk: High)"
 
 **Your organization decides**: "MD5 is OK for ETags (non-security use) but BLOCKED for passwords"
 
@@ -323,7 +323,7 @@ violations[msg] {
 ```
 
 **Narration**:
-"QVS-CBOM tells you WHERE algorithms are used and WHAT they're doing. REGO lets you create nuanced rules based on context. MD5 for file integrity checks? Maybe OK. MD5 for password hashing? Absolutely not. REGO enforces these business logic rules that go beyond simple allow/deny lists."
+"Aqua-CBOM tells you WHERE algorithms are used and WHAT they're doing. REGO lets you create nuanced rules based on context. MD5 for file integrity checks? Maybe OK. MD5 for password hashing? Absolutely not. REGO enforces these business logic rules that go beyond simple allow/deny lists."
 
 **Example Output**:
 ```
@@ -340,7 +340,7 @@ REGO's GO/NO-GO decision in CI/CD:
 
 **The Need**: Enforce organizational risk tolerance levels.
 
-**QVS-CBOM says**:
+**Aqua-CBOM says**:
 - "Finding 1: MD5 (risk: High)"
 - "Finding 2: SHA1 (risk: High)"
 - "Finding 3: RSA-2048 (risk: Medium, quantum-vulnerable)"
@@ -349,7 +349,7 @@ REGO's GO/NO-GO decision in CI/CD:
 
 **REGO implements risk-based blocking**:
 ```rego
-# Block based on QVS-CBOM's risk assessment
+# Block based on Aqua-CBOM's risk assessment
 violations[msg] {
   finding := input.findings[_]
   finding.risk == "High"
@@ -374,7 +374,7 @@ quantum_warnings[msg] {
 ```
 
 **Narration**:
-"QVS-CBOM does the expert cryptographic risk assessment. REGO translates that into organizational action. You decide: 'Block High-risk today, but give us warnings for quantum vulnerability so we can plan a 5-year migration.' REGO enforces YOUR risk tolerance, using QVS-CBOM's expert analysis as input."
+"Aqua-CBOM does the expert cryptographic risk assessment. REGO translates that into organizational action. You decide: 'Block High-risk today, but give us warnings for quantum vulnerability so we can plan a 5-year migration.' REGO enforces YOUR risk tolerance, using Aqua-CBOM's expert analysis as input."
 
 **Connection to Aqua**:
 Aqua's Kubernetes Policy can enforce different controls based on risk labels:
@@ -395,7 +395,7 @@ required_labels = [
 
 **The Need**: You have legacy applications that can't be immediately updated.
 
-**QVS-CBOM says**: "SHA1 found in /legacy-app/crypto.dll (risk: High)"
+**Aqua-CBOM says**: "SHA1 found in /legacy-app/crypto.dll (risk: High)"
 
 **Your organization decides**: "Block SHA1 everywhere EXCEPT in the legacy-namespace for 6 months"
 
@@ -420,7 +420,7 @@ is_legacy_namespace(ns) {
 ```
 
 **Narration**:
-"QVS-CBOM identifies all cryptographic risks uniformly - it doesn't make business exceptions. REGO is where you encode your organizational migration strategy. You can say 'We know SHA1 is bad, but we need 6 months to refactor our legacy app. Allow it ONLY in this specific namespace with extra monitoring.' REGO gives you surgical control over exception handling."
+"Aqua-CBOM identifies all cryptographic risks uniformly - it doesn't make business exceptions. REGO is where you encode your organizational migration strategy. You can say 'We know SHA1 is bad, but we need 6 months to refactor our legacy app. Allow it ONLY in this specific namespace with extra monitoring.' REGO gives you surgical control over exception handling."
 
 ---
 
@@ -434,23 +434,23 @@ is_legacy_namespace(ns) {
 FIPS 140-3 adopts ISO/IEC 19790 and 24759 standards, providing international recognition. A single validation now meets both U.S./Canadian and international requirements.
 
 #### 2. **Container-Specific Clarity**
-140-3 explicitly addresses containerized and cloud-deployed systems with clearer module boundary definitions. This makes our QVS-CBOM approach more defensible - we can precisely scope the cryptographic module within a container.
+140-3 explicitly addresses containerized and cloud-deployed systems with clearer module boundary definitions. This makes our Aqua-CBOM approach more defensible - we can precisely scope the cryptographic module within a container.
 
 #### 3. **Enhanced Self-Testing Requirements**
 
 **Pre-Operational Self-Test (POST)**:
 - Runs at power-up as an integrity check
 - Ensures the module's code hasn't been tampered with
-- QVS-CBOM validates module integrity through file integrity monitoring
+- Aqua-CBOM validates module integrity through file integrity monitoring
 
 **Conditional Self-Tests**:
 - Algorithm-specific tests run on-demand (before first use)
 - If an algorithm isn't used during execution, its test doesn't run at startup
 - More efficient than 140-2's one-time startup tests
-- QVS-CBOM identifies which algorithms are actually used, supporting this approach
+- Aqua-CBOM identifies which algorithms are actually used, supporting this approach
 
 #### 4. **Post-Quantum Cryptography (PQC) Readiness**
-140-3 includes provisions for integrating post-quantum algorithms once NIST approves them. This is where **QVS-CBOM provides strategic advantage** - we already identify quantum-vulnerable algorithms and provide migration paths.
+140-3 includes provisions for integrating post-quantum algorithms once NIST approves them. This is where **Aqua-CBOM provides strategic advantage** - we already identify quantum-vulnerable algorithms and provide migration paths.
 
 #### 5. **Trusted Channel vs Trusted Path**
 140-3 modernizes security with "trusted channels" (secure logical communication) instead of requiring physical interfaces. This is perfect for containerized systems where secure encryption and authentication replace physical controls.
@@ -464,9 +464,9 @@ FIPS 140-3 adopts ISO/IEC 19790 and 24759 standards, providing international rec
 
 | Requirement | 140-2 Approach | 140-3 Enhancement | Our Solution |
 |-------------|---------------|-------------------|--------------|
-| **Module Boundaries** | Ambiguous for containers | Clear container scoping | QVS-CBOM scans containers natively |
+| **Module Boundaries** | Ambiguous for containers | Clear container scoping | Aqua-CBOM scans containers natively |
 | **Self-Tests** | One-time at startup | POST + Conditional tests | CBOM validates integrity + usage |
-| **PQC Readiness** | Not addressed | Forward-looking provisions | QVS-CBOM quantum-safe analysis |
+| **PQC Readiness** | Not addressed | Forward-looking provisions | Aqua-CBOM quantum-safe analysis |
 | **Documentation** | Basic requirements | Stricter evidence | CBOM provides audit trail |
 | **Cloud/Container Support** | Implicit | Explicit guidance | Architecture designed for containers |
 
@@ -476,7 +476,7 @@ FIPS 140-3 adopts ISO/IEC 19790 and 24759 standards, providing international rec
 
 ## Part 5: Summary - Division of Responsibilities
 
-| Layer | QVS-CBOM | REGO | Aqua Security |
+| Layer | Aqua-CBOM | REGO | Aqua Security |
 |-------|----------|------|---------------|
 | **Detects Algorithms** | ✅ Scans code/binaries | ❌ | ❌ |
 | **Assesses Risk** | ✅ NIST analysis | ❌ | ❌ |
@@ -491,7 +491,7 @@ FIPS 140-3 adopts ISO/IEC 19790 and 24759 standards, providing international rec
 | **Kubernetes Controls** | ❌ | ❌ | ✅ Pod security enforcement |
 
 **Key Insight**:
-- **QVS-CBOM** = Expert cryptographer that finds and assesses everything
+- **Aqua-CBOM** = Expert cryptographer that finds and assesses everything
 - **REGO** = CI/CD quality gate that enforces YOUR organization's custom rules
 - **Aqua Security** = The compliance enforcer across the entire container lifecycle (Image → Deploy → Runtime)
 
@@ -511,7 +511,7 @@ Step 2: Aqua Scanner (CI/CD)
     → Checks: Vulnerabilities, CIS benchmarks, licenses, packages
     → If FAIL: Pipeline stops
     ↓
-Step 3: QVS-CBOM Scan (CI/CD - only if Step 2 passes)
+Step 3: Aqua-CBOM Scan (CI/CD - only if Step 2 passes)
     → Generates: cbom.json with all cryptographic components
     ↓
 Step 4: REGO Evaluation (CI/CD)
@@ -664,9 +664,9 @@ $ opa eval --data fips-compliance-cdx16.rego --input cbom.json 'data.fips_compli
 
 ## Part 8: Why All Three Are Necessary
 
-### QVS-CBOM Alone Is Not Enough
+### Aqua-CBOM Alone Is Not Enough
 
-**Without REGO and Aqua**, QVS-CBOM can only *report* findings - it cannot *enforce* compliance:
+**Without REGO and Aqua**, Aqua-CBOM can only *report* findings - it cannot *enforce* compliance:
 
 ```json
 {
@@ -681,7 +681,7 @@ $ opa eval --data fips-compliance-cdx16.rego --input cbom.json 'data.fips_compli
 ```
 
 **Example Failure**:
-QVS-CBOM detects MD5 and generates a detailed report. But without enforcement:
+Aqua-CBOM detects MD5 and generates a detailed report. But without enforcement:
 - ❌ Image still deploys to production
 - ❌ Developers might ignore the report
 - ❌ No automatic blocking
@@ -711,7 +711,7 @@ REGO is a CI/CD gate. You still need Aqua platform for defense-in-depth.
 
 ### Aqua Policies Alone Are Not Enough
 
-**Without QVS-CBOM and REGO**, Aqua policies have no cryptographic intelligence:
+**Without Aqua-CBOM and REGO**, Aqua policies have no cryptographic intelligence:
 
 ```hcl
 # This blocks privileged containers:
@@ -728,7 +728,7 @@ A container runs as non-root, has read-only filesystem, no host network access -
 
 ### Together They Provide Defense in Depth
 
-| Layer | QVS-CBOM | REGO | Aqua Security | Combined |
+| Layer | Aqua-CBOM | REGO | Aqua Security | Combined |
 |-------|----------|------|---------------|----------|
 | **Crypto Detection** | ✅ Expert analysis | ❌ | ❌ | ✅ Finds all algorithms |
 | **Risk Assessment** | ✅ NIST standards | ❌ | ❌ | ✅ Knows what's weak |
@@ -744,15 +744,15 @@ A container runs as non-root, has read-only filesystem, no host network access -
 ## Part 9: Key Talking Points for Your Meeting
 
 ### Opening Statement
-"We've implemented a three-layer FIPS 140-3 compliance system. QVS-CBOM provides expert cryptographic detection and risk assessment - it finds every algorithm and tells us what's weak. REGO provides the policy decision layer in CI/CD - it applies our organization's specific compliance rules to those findings. Aqua Security provides the enforcement across the entire container lifecycle - it blocks non-compliant images, controls deployment, and monitors runtime. Together, they create an automated compliance pipeline that catches violations before they reach production."
+"We've implemented a three-layer FIPS 140-3 compliance system. Aqua-CBOM provides expert cryptographic detection and risk assessment - it finds every algorithm and tells us what's weak. REGO provides the policy decision layer in CI/CD - it applies our organization's specific compliance rules to those findings. Aqua Security provides the enforcement across the entire container lifecycle - it blocks non-compliant images, controls deployment, and monitors runtime. Together, they create an automated compliance pipeline that catches violations before they reach production."
 
 ### Technical Highlights
 
 **Point 1: Automated Compliance**
-"Previously, FIPS compliance required manual code audits and penetration testing. Now, QVS-CBOM automatically scans every image and identifies all cryptographic usage with expert-level NIST analysis. REGO then applies our organization's specific compliance rules to those findings in CI/CD. Aqua enforces the decisions by blocking non-compliant images at multiple stages - Image Assurance, Kubernetes Admission Control, and Runtime Protection. This shifts security left - catching issues in CI/CD instead of production."
+"Previously, FIPS compliance required manual code audits and penetration testing. Now, Aqua-CBOM automatically scans every image and identifies all cryptographic usage with expert-level NIST analysis. REGO then applies our organization's specific compliance rules to those findings in CI/CD. Aqua enforces the decisions by blocking non-compliant images at multiple stages - Image Assurance, Kubernetes Admission Control, and Runtime Protection. This shifts security left - catching issues in CI/CD instead of production."
 
 **Point 2: Future-Proof with Quantum Risk (FIPS 140-3 Advantage)**
-"QVS-CBOM doesn't just validate today's compliance - it flags algorithms that will become vulnerable to quantum computers. This aligns perfectly with FIPS 140-3's forward-looking provisions for post-quantum cryptography. REGO lets us set different policies for quantum risk versus immediate risk. For example, we can block MD5 today (already broken) but just warn about RSA-2048 (quantum-vulnerable in 10 years). This gives us a runway to plan migrations to post-quantum cryptography as NIST approves new algorithms under 140-3."
+"Aqua-CBOM doesn't just validate today's compliance - it flags algorithms that will become vulnerable to quantum computers. This aligns perfectly with FIPS 140-3's forward-looking provisions for post-quantum cryptography. REGO lets us set different policies for quantum risk versus immediate risk. For example, we can block MD5 today (already broken) but just warn about RSA-2048 (quantum-vulnerable in 10 years). This gives us a runway to plan migrations to post-quantum cryptography as NIST approves new algorithms under 140-3."
 
 **Point 3: Zero-Trust Architecture**
 "Aqua's runtime policies enforce zero-trust principles. Even if a FIPS-compliant image is deployed, we continuously monitor it for tampering attempts - file modifications, package installations, privilege escalations. If someone tries to inject non-FIPS crypto at runtime, Aqua detects and blocks it immediately."
@@ -779,7 +779,7 @@ A container runs as non-root, has read-only filesystem, no host network access -
 ## Conclusion
 
 **The Partnership**:
-- **QVS-CBOM** = The Expert Cryptographer - finds and assesses all cryptographic usage
+- **Aqua-CBOM** = The Expert Cryptographer - finds and assesses all cryptographic usage
 - **REGO** = The CI/CD Gatekeeper - enforces your organization's compliance rules in the pipeline
 - **Aqua Security** = The Multi-Layer Guard - enforces compliance across the entire container lifecycle (Image → Deploy → Runtime)
 

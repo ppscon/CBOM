@@ -165,38 +165,38 @@ resource "aquasec_kubernetes_assurance_policy" "k8s_fips" {
 
 ## Detailed Gap Analysis & Solutions
 
-| Gap Area | Description / Limitation | Aqua Coverage | QVS-CBOM Solution | REGO Requirement |
+| Gap Area | Description / Limitation | Aqua Coverage | Aqua-CBOM Solution | REGO Requirement |
 |----------|-------------------------|---------------|-------------------|------------------|
-| **Module-level validation** | Cannot certify exact FIPS-validated build with correct compilation flags | ❌ Package names only | ✅ Crypto module fingerprinting | Low - QVS-CBOM handles |
+| **Module-level validation** | Cannot certify exact FIPS-validated build with correct compilation flags | ❌ Package names only | ✅ Crypto module fingerprinting | Low - Aqua-CBOM handles |
 | **Layer-level provenance checks** | No layer-to-provenance mapping or pipeline change detection | ❌ No layer validation | ✅ Layer-by-layer CBOM generation | Medium - Provenance validation |
 | **Runtime crypto-function visibility** | Cannot monitor specific API/algorithm calls at runtime | ⚠️ File monitoring only | ✅ Static analysis + dynamic detection | High - Runtime interception |
 | **Automated attestation** | No runtime proof that container uses approved modules | ❌ No attestation | ✅ CBOM-based attestation | Medium - Policy integration |
-| **Algorithm deprecation / PQC** | No policy engine for crypto algorithm lifecycle management | ❌ No algorithm policies | ✅ Quantum-safe migration rules | Low - QVS-CBOM handles |
+| **Algorithm deprecation / PQC** | No policy engine for crypto algorithm lifecycle management | ❌ No algorithm policies | ✅ Quantum-safe migration rules | Low - Aqua-CBOM handles |
 | **Granular exception workflows** | Limited conditional exception handling with expiry | ⚠️ Basic allow/block | ❌ Manual workflows | High - Custom REGO logic |
 | **Cross-image consistency rules** | No service-wide crypto consistency enforcement | ❌ No cross-image rules | ✅ CBOM comparison capabilities | Medium - Consistency validation |
 | **Tight CBOM integration** | No native CBOM consumption or generation | ❌ No CBOM support | ✅ Native CBOM generation | Low - Already solved |
 
 ### Priority Gap Solutions
 
-#### **Tier 1: QVS-CBOM Solves Directly (No REGO needed)**
+#### **Tier 1: Aqua-CBOM Solves Directly (No REGO needed)**
 ```bash
 # Module-level validation
-qvs-cbom --validate-fips --check-compilation-flags image:tag
+aqua-cbom --validate-fips --check-compilation-flags image:tag
 
 # Algorithm deprecation tracking
-qvs-cbom --quantum-safe-report --highlight-deprecated image:tag
+aqua-cbom --quantum-safe-report --highlight-deprecated image:tag
 
 # CBOM generation and comparison
-qvs-cbom --compare-service-consistency service-a:v1 service-a:v2
+aqua-cbom --compare-service-consistency service-a:v1 service-a:v2
 ```
 
-#### **Tier 2: Combined Aqua + QVS-CBOM (Minimal REGO)**
+#### **Tier 2: Combined Aqua + Aqua-CBOM (Minimal REGO)**
 ```hcl
 # Layer-level provenance (Custom Check)
 custom_checks = [
   {
     name = "Layer Provenance Validation"
-    command = "qvs-cbom --verify-layer-provenance --cbom /tmp/layer.json"
+    command = "aqua-cbom --verify-layer-provenance --cbom /tmp/layer.json"
   }
 ]
 ```
@@ -330,10 +330,10 @@ Only implement REGO for gaps that cannot be covered by standard policies:
 
 ---
 
-## QVS-CBOM: Perfect Complement for iBASET
+## Aqua-CBOM: Perfect Complement for iBASET
 
 ### Your CBOM Project Overview
-Your **QVS-CBOM (Quantum Vulnerability Scanner - Component Bill of Materials)** project is **extremely relevant** for iBASET's FIPS 140-3 requirements:
+Your **Aqua-CBOM (Quantum Vulnerability Scanner - Component Bill of Materials)** project is **extremely relevant** for iBASET's FIPS 140-3 requirements:
 
 #### Key Capabilities
 - **CycloneDX 1.4 compliant** CBOM generation
@@ -361,7 +361,7 @@ Your **QVS-CBOM (Quantum Vulnerability Scanner - Component Bill of Materials)** 
 ### Strategic Value for iBASET
 
 #### 1. **Fills Critical Aqua Gaps**
-- **Layer-by-layer crypto analysis** - QVS-CBOM can scan individual layers
+- **Layer-by-layer crypto analysis** - Aqua-CBOM can scan individual layers
 - **Quantum risk assessment** - Beyond FIPS, addresses quantum threats
 - **Comprehensive crypto inventory** - What Aqua can't detect natively
 
@@ -376,7 +376,7 @@ Your **QVS-CBOM (Quantum Vulnerability Scanner - Component Bill of Materials)** 
 ```bash
 # Enhanced Aqua + CBOM workflow
 1. Aqua policies enforce FIPS base images
-2. QVS-CBOM scans for quantum-vulnerable crypto
+2. Aqua-CBOM scans for quantum-vulnerable crypto
 3. Combined reporting for complete compliance picture
 ```
 
@@ -390,13 +390,13 @@ resource "aquasec_image_assurance_policy" "fips_baseline" {
   # Block non-FIPS base images
   trusted_base_images_enabled = true
 
-  # Custom check: Run QVS-CBOM scan
+  # Custom check: Run Aqua-CBOM scan
   custom_checks_enabled = true
   custom_checks = [
     {
       name = "Quantum-Safe Crypto Check"
-      description = "Run QVS-CBOM to detect quantum-vulnerable cryptography"
-      command = "qvs-cbom -mode file -dir /tmp/image -output-cbom | jq '.components[] | select(.crypto.quantumSafe == false)' | wc -l | grep -E '^0$'"
+      description = "Run Aqua-CBOM to detect quantum-vulnerable cryptography"
+      command = "aqua-cbom -mode file -dir /tmp/image -output-cbom | jq '.components[] | select(.crypto.quantumSafe == false)' | wc -l | grep -E '^0$'"
     }
   ]
 }
@@ -406,7 +406,7 @@ resource "aquasec_image_assurance_policy" "fips_baseline" {
 ```bash
 # CI/CD Pipeline Enhancement
 1. Standard vulnerability scan (Aqua/Trivy)
-2. QVS-CBOM quantum crypto analysis
+2. Aqua-CBOM quantum crypto analysis
 3. Combined compliance report
 4. FIPS + Quantum-safe certification
 ```
@@ -415,7 +415,7 @@ resource "aquasec_image_assurance_policy" "fips_baseline" {
 
 #### Immediate Benefits
 - **90% FIPS compliance** via Aqua native policies
-- **100% crypto visibility** via QVS-CBOM
+- **100% crypto visibility** via Aqua-CBOM
 - **Quantum threat readiness** - beyond current requirements
 - **Zero workflow disruption** - integrates with existing tools
 
@@ -429,14 +429,14 @@ resource "aquasec_image_assurance_policy" "fips_baseline" {
 
 #### For iBASET Engagement
 1. **Start with Aqua** for immediate FIPS 140-3 compliance (ahead of 2026 deadline)
-2. **Add QVS-CBOM** for comprehensive crypto inventory (140-3 documentation requirement)
+2. **Add Aqua-CBOM** for comprehensive crypto inventory (140-3 documentation requirement)
 3. **Demonstrate quantum readiness** for future defense contracts (140-3 PQC provisions)
 4. **Provide complete solution** that competitors can't match
 5. **Emphasize 140-3 advantages**: Container clarity, international recognition, PQC readiness
 
 #### Technical Integration
 - **Aqua handles** base image compliance, package controls, runtime security
-- **QVS-CBOM handles** quantum crypto analysis, CBOM generation, future-proofing
+- **Aqua-CBOM handles** quantum crypto analysis, CBOM generation, future-proofing
 - **Combined** provides complete FIPS + quantum-safe compliance
 
 This positions you uniquely in the market with both current FIPS 140-3 compliance AND quantum-safe future readiness, ahead of the 2026 transition deadline.
@@ -446,7 +446,7 @@ This positions you uniquely in the market with both current FIPS 140-3 complianc
 **Competitive Advantage**:
 - Most vendors still focused on 140-2 (becoming obsolete in 2026)
 - Your solution is 140-3 ready NOW
-- QVS-CBOM addresses 140-3's PQC provisions (unique in market)
+- Aqua-CBOM addresses 140-3's PQC provisions (unique in market)
 - Container-specific validation aligns with 140-3 clarity
 
 **Customer Value**:
@@ -456,4 +456,4 @@ This positions you uniquely in the market with both current FIPS 140-3 complianc
 - Stricter compliance = better security posture
 
 ---
-*This analysis shows how your QVS-CBOM project perfectly complements Aqua's FIPS 140-3 capabilities, providing iBASET with a comprehensive solution that addresses current compliance needs, 2026 transition requirements, and future quantum threats.*
+*This analysis shows how your Aqua-CBOM project perfectly complements Aqua's FIPS 140-3 capabilities, providing iBASET with a comprehensive solution that addresses current compliance needs, 2026 transition requirements, and future quantum threats.*

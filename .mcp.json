@@ -1,0 +1,48 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "sbp_6ad3f44dbcedf2a3780e88f5e51c69ab47e3c137"
+      ]
+    },
+    "Context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ]
+    },
+    "desktop-commander": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@wonderwhy-er/desktop-commander"
+      ]
+    },
+    "render": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@niyogi/render-mcp@latest",
+        "start"
+      ],
+      "env": {
+        "RENDER_API_KEY": "rnd_Vkx1Nv43ku0ghPAscuuKF8U5RB3d"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "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"
+      }
+    }
+  }
+}

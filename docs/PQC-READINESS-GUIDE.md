@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-FIPS 140-3's forward-looking provisions for post-quantum cryptography (PQC) represent a critical advantage for organizations planning for quantum computing threats. This guide explains how QVS-CBOM positions your organization ahead of the curve.
+FIPS 140-3's forward-looking provisions for post-quantum cryptography (PQC) represent a critical advantage for organizations planning for quantum computing threats. This guide explains how Aqua-CBOM positions your organization ahead of the curve.
 
 ---
 
@@ -76,11 +76,11 @@ FIPS 140-3's forward-looking provisions for post-quantum cryptography (PQC) repr
 
 ---
 
-## How QVS-CBOM Enables PQC Readiness
+## How Aqua-CBOM Enables PQC Readiness
 
 ### 1. Current Cryptographic Inventory
 
-**Capability**: QVS-CBOM identifies all cryptographic algorithms in use today.
+**Capability**: Aqua-CBOM identifies all cryptographic algorithms in use today.
 
 **Value for PQC Planning**:
 ```json
@@ -110,7 +110,7 @@ FIPS 140-3's forward-looking provisions for post-quantum cryptography (PQC) repr
 
 ### 2. Quantum Risk Assessment
 
-**Capability**: QVS-CBOM provides NIST-based quantum vulnerability analysis.
+**Capability**: Aqua-CBOM provides NIST-based quantum vulnerability analysis.
 
 **Risk Levels**:
 - **Critical**: RSA-1024, ECC-P192 (already weak + quantum-vulnerable)
@@ -173,7 +173,7 @@ Phase 4: PQC-Only (2030+)
 **Example Migration Plan**:
 ```bash
 # Generate CBOM for current system
-./qvs-cbom-darwin -mode file -dir /app -output-cbom > current-cbom.json
+./aqua-cbom-darwin -mode file -dir /app -output-cbom > current-cbom.json
 
 # Identify quantum-vulnerable components
 jq '.findings[] | select(.quantumRisk != "None")' current-cbom.json > migration-candidates.json
@@ -230,9 +230,9 @@ jq 'group_by(.risk) | map({risk: .[0].risk, count: length, components: map(.file
 
 ## Competitive Advantage
 
-### Why QVS-CBOM + FIPS 140-3 = Market Leadership
+### Why Aqua-CBOM + FIPS 140-3 = Market Leadership
 
-| Capability | QVS-CBOM | Competitor Solutions |
+| Capability | Aqua-CBOM | Competitor Solutions |
 |------------|----------|---------------------|
 | **Current Inventory** | ✅ Complete crypto asset discovery | ⚠️ Manual audits |
 | **Quantum Risk** | ✅ NIST-based risk assessment | ❌ Not addressed |
@@ -250,13 +250,13 @@ jq 'group_by(.risk) | map({risk: .[0].risk, count: length, components: map(.file
 
 **ROI Calculation**:
 ```
-Without QVS-CBOM PQC Planning:
+Without Aqua-CBOM PQC Planning:
 ├── Emergency migration in 2030: $2M-5M
 ├── Downtime during migration: $500K-1M
 ├── Compliance violations: $1M-10M
 └── TOTAL: $3.5M-16M
 
-With QVS-CBOM PQC Planning:
+With Aqua-CBOM PQC Planning:
 ├── Gradual migration 2026-2030: $1M-2M
 ├── No downtime (hybrid approach): $0
 ├── Continuous compliance: $0
@@ -355,7 +355,7 @@ NET SAVINGS: $2.5M-14M
 
 ## Conclusion
 
-### Why QVS-CBOM + FIPS 140-3 = PQC Leadership
+### Why Aqua-CBOM + FIPS 140-3 = PQC Leadership
 
 **Strategic Advantages**:
 1. **Complete Visibility**: Know exactly what needs migrating
@@ -370,12 +370,12 @@ NET SAVINGS: $2.5M-14M
 - ✅ Quantum-safe in the future
 
 **Customer Message**:
-*"While competitors scramble to understand their quantum risk in 2030, you'll have completed a planned, tested, and compliant migration - because you started with QVS-CBOM and FIPS 140-3 in 2025."*
+*"While competitors scramble to understand their quantum risk in 2030, you'll have completed a planned, tested, and compliant migration - because you started with Aqua-CBOM and FIPS 140-3 in 2025."*
 
 ---
 
 **Next Steps**:
-1. Generate your first CBOM: `./qvs-cbom-darwin -mode file -dir /app -output-cbom`
+1. Generate your first CBOM: `./aqua-cbom-darwin -mode file -dir /app -output-cbom`
 2. Review quantum-vulnerable assets
 3. Schedule PQC planning workshop
 4. Present roadmap to leadership

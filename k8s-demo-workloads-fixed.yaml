@@ -1,4 +1,4 @@
-# QVS-CBOM Demo Workloads - Fixed Version
+# Aqua-CBOM Demo Workloads - Fixed Version
 # Stable containers for demo purposes
 
 apiVersion: v1
@@ -6,7 +6,7 @@ kind: Namespace
 metadata:
   name: cbom
   labels:
-    purpose: qvs-cbom-testing
+    purpose: aqua-cbom-testing
 ---
 # Simple Python app that generates RSA keys and stays running
 apiVersion: apps/v1

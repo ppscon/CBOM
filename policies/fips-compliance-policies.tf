@@ -341,24 +341,24 @@ resource "aquasec_kubernetes_assurance_policy" "fips_k8s_compliance" {
 }
 
 # ==================================
-# QVS-CBOM Integration Examples
+# Aqua-CBOM Integration Examples
 # ==================================
 locals {
   cbom_integration_examples = [
     {
       name        = "Quantum-Safe Cryptography Assessment"
       description = "Scan for quantum-vulnerable cryptographic algorithms"
-      command     = "qvs-cbom -mode file -dir /tmp/image | jq -r '.components[] | select(.crypto.quantumSafe == false) | .crypto.algorithm' | wc -l | test $(cat) -eq 0"
+      command     = "aqua-cbom -mode file -dir /tmp/image | jq -r '.components[] | select(.crypto.quantumSafe == false) | .crypto.algorithm' | wc -l | test $(cat) -eq 0"
     },
     {
       name        = "CMVP Module Validation"
       description = "Verify cryptographic modules have CMVP validation"
-      command     = "qvs-cbom -mode file -dir /tmp/image | jq -r '.components[] | select(.crypto.cmvpValidated == false) | .name' | wc -l | test $(cat) -eq 0"
+      command     = "aqua-cbom -mode file -dir /tmp/image | jq -r '.components[] | select(.crypto.cmvpValidated == false) | .name' | wc -l | test $(cat) -eq 0"
     },
     {
       name        = "Cryptographic Asset Inventory"
       description = "Generate complete CBOM for compliance reporting"
-      command     = "qvs-cbom -mode file -dir /tmp/image -output-cbom > /tmp/compliance-cbom.json && test -s /tmp/compliance-cbom.json"
+      command     = "aqua-cbom -mode file -dir /tmp/image -output-cbom > /tmp/compliance-cbom.json && test -s /tmp/compliance-cbom.json"
     }
   ]
 }

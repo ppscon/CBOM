@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Enhanced QVS-CBOM Demo Script for Customer Presentations
+# Enhanced Aqua-CBOM Demo Script for Customer Presentations
 # Features: Better output formatting, CSV generation, summary statistics
 
 # Color codes for better visibility
@@ -27,7 +27,7 @@ mkdir -p "$OUTPUT_DIR"
 print_banner() {
     echo -e "${CYAN}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║            QVS-CBOM Quantum Vulnerability Scanner         ║"
+    echo "║            Aqua-CBOM Quantum Vulnerability Scanner         ║"
     echo "║        Cryptographic Bill of Materials Generator          ║"
     echo "╚══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -119,24 +119,24 @@ check_prerequisites() {
         fi
     fi
 
-    # Check for QVS-CBOM binary (for local processing)
+    # Check for Aqua-CBOM binary (for local processing)
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        CBOM_BINARY="./qvs-cbom-darwin"
+        CBOM_BINARY="./aqua-cbom-darwin"
     else
-        CBOM_BINARY="./qvs-cbom"
+        CBOM_BINARY="./aqua-cbom"
     fi
 
     if [ -x "$CBOM_BINARY" ]; then
-        print_success "QVS-CBOM binary found: $CBOM_BINARY"
+        print_success "Aqua-CBOM binary found: $CBOM_BINARY"
     else
-        print_warning "QVS-CBOM binary not executable, some features may be limited"
+        print_warning "Aqua-CBOM binary not executable, some features may be limited"
     fi
 }
 
 extract_cbom_from_output() {
     local log_file="$1"
     # Extract JSON CBOM from the combined output
-    sed -n '/^{/,/^}/p' "$log_file" | grep -v "^Running /qvs-cbom"
+    sed -n '/^{/,/^}/p' "$log_file" | grep -v "^Running /aqua-cbom"
 }
 
 generate_summary() {
@@ -150,10 +150,10 @@ generate_summary() {
 
     # Parse the JSON and create summary
     local total=$(jq '.findings | length' "$json_file" 2>/dev/null || echo "0")
-    local critical=$(jq '[.findings[] | select((.risk | ascii_upcase) == "CRITICAL")] | length' "$json_file" 2>/dev/null || echo "0")
-    local high=$(jq '[.findings[] | select((.risk | ascii_upcase) == "HIGH")] | length' "$json_file" 2>/dev/null || echo "0")
-    local medium=$(jq '[.findings[] | select((.risk | ascii_upcase) == "MEDIUM")] | length' "$json_file" 2>/dev/null || echo "0")
-    local low=$(jq '[.findings[] | select((.risk | ascii_upcase) == "LOW")] | length' "$json_file" 2>/dev/null || echo "0")
+    local critical=$(jq '[.findings[] | select(.risk == "CRITICAL")] | length' "$json_file" 2>/dev/null || echo "0")
+    local high=$(jq '[.findings[] | select(.risk == "HIGH")] | length' "$json_file" 2>/dev/null || echo "0")
+    local medium=$(jq '[.findings[] | select(.risk == "MEDIUM")] | length' "$json_file" 2>/dev/null || echo "0")
+    local low=$(jq '[.findings[] | select(.risk == "LOW")] | length' "$json_file" 2>/dev/null || echo "0")
 
     echo -e "${BOLD}Total Quantum-Risk Findings:${NC} $total"
     echo ""
@@ -192,32 +192,32 @@ run_juice_demo() {
     local json_file="$OUTPUT_DIR/juice-shop-$timestamp.json"
     local csv_file="$OUTPUT_DIR/juice-shop-$timestamp.csv"
 
-    print_info "Running combined Trivy + QVS-CBOM scan..."
+    print_info "Running combined Trivy + Aqua-CBOM scan..."
 
-    # Run the scan and write CBOM JSON directly to a mounted file
+    # Run the scan
     docker run --rm \
         -v "$DOCKER_SOCK":"$DOCKER_SOCK" \
         -e DOCKER_HOST="${DOCKER_HOST:-}" \
-        -v "$OUTPUT_DIR":/out \
-        -e CBOM_OUTPUT_FILE="/out/juice-shop-$timestamp.json" \
         "$IMAGE" --CBOM image "$TARGET_IMAGE" 2>&1 | tee "$log_file"
 
-    # Confirm JSON saved
+    # Extract CBOM JSON from output
+    print_info "Extracting CBOM data..."
+    extract_cbom_from_output "$log_file" > "$json_file"
+
+    # Generate CSV if requested
     if [ -s "$json_file" ]; then
         print_success "CBOM JSON saved to: $json_file"
 
-        if [ -x "./json-to-csv.sh" ]; then
+        if [ -x "./docker-run-csv.sh" ]; then
             print_info "Generating CSV report..."
-            ./json-to-csv.sh "$json_file" "$csv_file"
+            ./docker-run-csv.sh "$json_file" "$csv_file"
             print_success "CSV report saved to: $csv_file"
-        else
-            print_warning "json-to-csv.sh not found; skipping CSV generation"
         fi
 
         # Generate summary
         generate_summary "$json_file"
     else
-        print_warning "No CBOM data saved (expected at $json_file)"
+        print_warning "No CBOM data extracted from scan output"
     fi
 
     echo ""
@@ -238,23 +238,21 @@ run_image_demo() {
     local json_file="$OUTPUT_DIR/${safe_name}-$timestamp.json"
     local csv_file="$OUTPUT_DIR/${safe_name}-$timestamp.csv"
 
-    print_info "Running combined Trivy + QVS-CBOM scan..."
+    print_info "Running combined Trivy + Aqua-CBOM scan..."
 
     docker run --rm \
         -v "$DOCKER_SOCK":"$DOCKER_SOCK" \
         -e DOCKER_HOST="${DOCKER_HOST:-}" \
-        -v "$OUTPUT_DIR":/out \
-        -e CBOM_OUTPUT_FILE="/out/${safe_name}-$timestamp.json" \
         "$IMAGE" --CBOM image "$target" 2>&1 | tee "$log_file"
+
+    extract_cbom_from_output "$log_file" > "$json_file"
 
     if [ -s "$json_file" ]; then
         print_success "CBOM JSON saved to: $json_file"
 
-        if [ -x "./json-to-csv.sh" ]; then
-            ./json-to-csv.sh "$json_file" "$csv_file"
+        if [ -x "./docker-run-csv.sh" ]; then
+            ./docker-run-csv.sh "$json_file" "$csv_file"
             print_success "CSV report saved to: $csv_file"
-        else
-            print_warning "json-to-csv.sh not found; skipping CSV generation"
         fi
 
         generate_summary "$json_file"
@@ -287,18 +285,16 @@ run_k8s_demo() {
         -v "$DOCKER_SOCK":"$DOCKER_SOCK" \
         -v "$KUBECONFIG_DIR":/root/.kube \
         -e DOCKER_HOST="${DOCKER_HOST:-}" \
-        -v "$OUTPUT_DIR":/out \
-        -e CBOM_OUTPUT_FILE="/out/k8s-${NAMESPACE}-$timestamp.json" \
         "$IMAGE" --CBOM kubernetes --namespace "$NAMESPACE" 2>&1 | tee "$log_file"
+
+    extract_cbom_from_output "$log_file" > "$json_file"
 
     if [ -s "$json_file" ]; then
         print_success "CBOM JSON saved to: $json_file"
 
-        if [ -x "./json-to-csv.sh" ]; then
-            ./json-to-csv.sh "$json_file" "$csv_file"
+        if [ -x "./docker-run-csv.sh" ]; then
+            ./docker-run-csv.sh "$json_file" "$csv_file"
             print_success "CSV report saved to: $csv_file"
-        else
-            print_warning "json-to-csv.sh not found; skipping CSV generation"
         fi
 
         generate_summary "$json_file"
@@ -331,18 +327,16 @@ run_filesystem_demo() {
 
     docker run --rm \
         -v "$target":/workspace \
-        -v "$OUTPUT_DIR":/out \
-        -e CBOM_OUTPUT_FILE="/out/fs-${safe_name}-$timestamp.json" \
         "$IMAGE" --CBOM filesystem /workspace 2>&1 | tee "$log_file"
+
+    extract_cbom_from_output "$log_file" > "$json_file"
 
     if [ -s "$json_file" ]; then
         print_success "CBOM JSON saved to: $json_file"
 
-        if [ -x "./json-to-csv.sh" ]; then
-            ./json-to-csv.sh "$json_file" "$csv_file"
+        if [ -x "./docker-run-csv.sh" ]; then
+            ./docker-run-csv.sh "$json_file" "$csv_file"
             print_success "CSV report saved to: $csv_file"
-        else
-            print_warning "json-to-csv.sh not found; skipping CSV generation"
         fi
 
         generate_summary "$json_file"

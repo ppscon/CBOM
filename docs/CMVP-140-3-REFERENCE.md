@@ -215,12 +215,12 @@ openssl list -providers -verbose | grep -A 5 fips
 #     selftest: passed  # ← Critical indicator
 ```
 
-### Method 3: QVS-CBOM Validation
+### Method 3: Aqua-CBOM Validation
 
 **Process**:
 ```bash
 # Generate CBOM
-./qvs-cbom-darwin -mode file -dir /app -output-cbom > cbom.json
+./aqua-cbom-darwin -mode file -dir /app -output-cbom > cbom.json
 
 # Check for CMVP validation status
 jq '.components[] | select(.crypto) | {
@@ -263,7 +263,7 @@ jq '.components[] | select(.crypto) | {
 
 ---
 
-## Integration with QVS-CBOM
+## Integration with Aqua-CBOM
 
 ### Workflow: CMVP Validation + CBOM
 

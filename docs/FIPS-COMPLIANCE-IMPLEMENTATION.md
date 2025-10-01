@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explains the FIPS 140-3 compliance implementation using Aqua Security policies integrated with QVS-CBOM (Cryptography Bill of Materials) analysis. The solution provides automated cryptographic compliance validation for container images, runtime environments, and Kubernetes workloads.
+This document explains the FIPS 140-3 compliance implementation using Aqua Security policies integrated with Aqua-CBOM (Cryptography Bill of Materials) analysis. The solution provides automated cryptographic compliance validation for container images, runtime environments, and Kubernetes workloads.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ This document explains the FIPS 140-3 compliance implementation using Aqua Secur
    - End-to-end compliance testing
    - Integrates CBOM generation with REGO evaluation
 
-4. **QVS-CBOM Generator**
+4. **Aqua-CBOM Generator**
    - Scans for cryptographic algorithms
    - Identifies quantum-vulnerable cryptography
    - Generates CycloneDX-compliant CBOM
@@ -442,11 +442,11 @@ fi
 
 ---
 
-## QVS-CBOM Integration Examples
+## Aqua-CBOM Integration Examples
 
 ### 1. Quantum-Safe Cryptography Assessment
 ```bash
-qvs-cbom -mode file -dir /tmp/image | \
+aqua-cbom -mode file -dir /tmp/image | \
   jq -r '.components[] | select(.crypto.quantumSafe == false) | .crypto.algorithm' | \
   wc -l | test $(cat) -eq 0
 ```
@@ -454,7 +454,7 @@ qvs-cbom -mode file -dir /tmp/image | \
 
 ### 2. CMVP Module Validation
 ```bash
-qvs-cbom -mode file -dir /tmp/image | \
+aqua-cbom -mode file -dir /tmp/image | \
   jq -r '.components[] | select(.crypto.cmvpValidated == false) | .name' | \
   wc -l | test $(cat) -eq 0
 ```
@@ -462,7 +462,7 @@ qvs-cbom -mode file -dir /tmp/image | \
 
 ### 3. Cryptographic Asset Inventory
 ```bash
-qvs-cbom -mode file -dir /tmp/image -output-cbom > /tmp/compliance-cbom.json && \
+aqua-cbom -mode file -dir /tmp/image -output-cbom > /tmp/compliance-cbom.json && \
   test -s /tmp/compliance-cbom.json
 ```
 **Purpose**: Generates complete CBOM for compliance reporting and audit trail.
@@ -502,7 +502,7 @@ cat outputs/fips-cbom.json | jq '.components[] | select(.crypto.quantumSafe == f
 
 ### 4. Generate Compliance Report
 ```bash
-./qvs-cbom-csv.sh outputs/fips-cbom.json --output fips-compliance-report.csv
+./aqua-cbom-csv.sh outputs/fips-cbom.json --output fips-compliance-report.csv
 ```
 
 ---

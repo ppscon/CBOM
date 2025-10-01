@@ -1,0 +1,397 @@
+Default context in kube configuration will be used unless specified
+
+Usage:
+  trivy kubernetes [flags] [CONTEXT]
+
+Aliases:
+  kubernetes, k8s
+
+Examples:
+  # cluster scanning
+  $ trivy k8s --report summary
+
+  # cluster scanning with specific namespace:
+  $ trivy k8s --include-namespaces kube-system --report summary 
+
+  # cluster with specific context:
+  $ trivy k8s kind-kind --report summary 
+  
+  
+
+
+Cache Flags
+      --cache-backend string   [EXPERIMENTAL] cache backend (e.g. redis://localhost:6379) (default "fs")
+      --cache-ttl duration     cache TTL when using redis as cache backend
+      --redis-ca string        redis ca file location, if using redis as cache backend
+      --redis-cert string      redis certificate file location, if using redis as cache backend
+      --redis-key string       redis key file location, if using redis as cache backend
+      --redis-tls              enable redis TLS with public certificates, if using redis as cache backend
+
+DB Flags
+      --db-repository strings        OCI repository(ies) to retrieve trivy-db in order of priority (default [mirror.gcr.io/aquasec/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2])
+      --download-db-only             download/update vulnerability database but don't run a scan
+      --download-java-db-only        download/update Java index database but don't run a scan
+      --java-db-repository strings   OCI repository(ies) to retrieve trivy-java-db in order of priority (default [mirror.gcr.io/aquasec/trivy-java-db:1,ghcr.io/aquasecurity/trivy-java-db:1])
+      --no-progress                  suppress progress bar
+      --skip-db-update               skip updating vulnerability database
+      --skip-java-db-update          skip updating Java index database
+
+Image Flags
+      --image-src strings   image source(s) to use, in priority order (allowed values: docker,containerd,podman,remote) (default [docker,containerd,podman,remote])
+
+Kubernetes Flags
+      --burst int                         specify the maximum burst for throttle (default 10)
+      --disable-node-collector            When the flag is activated, the node-collector job will not be executed, thus skipping misconfiguration findings on the node.
+      --exclude-kinds strings             indicate the kinds exclude from scanning (example: node)
+      --exclude-namespaces strings        indicate the namespaces excluded from scanning (example: kube-system)
+      --exclude-nodes strings             indicate the node labels that the node-collector job should exclude from scanning (example: kubernetes.io/arch:arm64,team:dev)
+      --exclude-owned                     exclude resources that have an owner reference
+      --include-kinds strings             indicate the kinds included in scanning (example: node)
+      --include-namespaces strings        indicate the namespaces included in scanning (example: kube-system)
+      --k8s-version string                specify k8s version to validate outdated api by it (example: 1.21.0)
+      --kubeconfig string                 specify the kubeconfig file path to use
+      --node-collector-imageref string    indicate the image reference for the node-collector scan job (default "ghcr.io/aquasecurity/node-collector:0.3.1")
+      --node-collector-namespace string   specify the namespace in which the node-collector job should be deployed (default "trivy-temp")
+      --qps float                         specify the maximum QPS to the master from this client (default 5)
+      --skip-images                       skip the downloading and scanning of images (vulnerabilities and secrets) in the cluster resources
+      --tolerations strings               specify node-collector job tolerations (example: key1=value1:NoExecute,key2=value2:NoSchedule)
+
+Misconfiguration Flags
+      --checks-bundle-repository string   OCI registry URL to retrieve checks bundle from (default "mirror.gcr.io/aquasec/trivy-checks:1")
+      --config-file-schemas strings       specify paths to JSON configuration file schemas to determine that a file matches some configuration and pass the schema to Rego checks for type checking
+      --helm-api-versions strings         Available API versions used for Capabilities.APIVersions. This flag is the same as the api-versions flag of the helm template command. (can specify multiple or separate values with commas: policy/v1/PodDisruptionBudget,apps/v1/Deployment)
+      --helm-kube-version string          Kubernetes version used for Capabilities.KubeVersion. This flag is the same as the kube-version flag of the helm template command.
+      --helm-set strings                  specify Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
+      --helm-set-file strings             specify Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)
+      --helm-set-string strings           specify Helm string values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
+      --helm-values strings               specify paths to override the Helm values.yaml files
+      --include-non-failures              include successes, available with '--scanners misconfig'
+      --misconfig-scanners strings        comma-separated list of misconfig scanners to use for misconfiguration scanning (default [azure-arm,cloudformation,dockerfile,helm,kubernetes,terraform,terraformplan-json,terraformplan-snapshot])
+      --raw-config-scanners strings       specify the types of scanners that will also scan raw configurations. For example, scanners will scan a non-adapted configuration into a shared state (allowed values: terraform)
+      --render-cause strings              specify configuration types for which the rendered causes will be shown in the table report (allowed values: terraform)
+      --tf-exclude-downloaded-modules     exclude misconfigurations for downloaded terraform modules
+
+Package Flags
+      --pkg-relationships strings   list of package relationships
+                                    Allowed values:
+                                      - unknown
+                                      - root
+                                      - workspace
+                                      - direct
+                                      - indirect
+                                     (default [unknown,root,workspace,direct,indirect])
+      --pkg-types strings           list of package types (allowed values: os,library) (default [os,library])
+
+Rego Flags
+      --check-namespaces strings    Rego namespaces
+      --config-check strings        specify the paths to the Rego check files or to the directories containing them, applying config files
+      --config-data strings         specify paths from which data for the Rego checks will be recursively loaded
+      --include-deprecated-checks   include deprecated checks
+      --skip-check-update           skip fetching rego check updates
+      --trace-rego                  enable more verbose trace output for custom queries
+
+Report Flags
+      --compliance string          compliance report to generate
+                                   Built-in compliance's:
+                                     - k8s-nsa-1.0
+                                     - k8s-cis-1.23
+                                     - eks-cis-1.4
+                                     - rke2-cis-1.24
+                                     - k8s-pss-baseline-0.1
+                                     - k8s-pss-restricted-0.1
+      --dependency-tree            [EXPERIMENTAL] show dependency origin tree of vulnerable packages
+      --exit-code int              specify exit code when any security issues are found
+  -f, --format string              format (allowed values: table,json,cyclonedx) (default "table")
+      --ignore-policy string       specify the Rego file path to evaluate each vulnerability
+      --ignorefile string          specify .trivyignore file (default ".trivyignore")
+      --list-all-pkgs              output all packages in the JSON report regardless of vulnerability
+  -o, --output string              output file name
+      --output-plugin-arg string   [EXPERIMENTAL] output plugin arguments
+      --report string              specify a report format for the output (allowed values: all,summary) (default "all")
+  -s, --severity strings           severities of security issues to be displayed
+                                   Allowed values:
+                                     - UNKNOWN
+                                     - LOW
+                                     - MEDIUM
+                                     - HIGH
+                                     - CRITICAL
+                                    (default [UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL])
+      --show-suppressed            [EXPERIMENTAL] show suppressed vulnerabilities
+  -t, --template string            output template
+
+Scan Flags
+      --detection-priority string   specify the detection priority:
+                                      - "precise": Prioritizes precise by minimizing false positives.
+                                      - "comprehensive": Aims to detect more security findings at the cost of potential false positives.
+                                     (allowed values: precise,comprehensive) (default "precise")
+      --disable-telemetry           disable sending anonymous usage data to Aqua
+      --distro string               [EXPERIMENTAL] specify a distribution, <family>/<version>
+      --file-patterns strings       specify config file patterns
+      --offline-scan                do not issue API requests to identify dependencies
+      --parallel int                number of goroutines enabled for parallel scanning, set 0 to auto-detect parallelism (default 5)
+      --rekor-url string            [EXPERIMENTAL] address of rekor STL server (default "https://rekor.sigstore.dev")
+      --sbom-sources strings        [EXPERIMENTAL] try to retrieve SBOM from the specified sources (allowed values: oci,rekor)
+      --scanners strings            comma-separated list of what security issues to detect (allowed values: vuln,misconfig,secret,rbac) (default [vuln,misconfig,secret,rbac])
+      --skip-dirs strings           specify the directories or glob patterns to skip
+      --skip-files strings          specify the files or glob patterns to skip
+      --skip-version-check          suppress notices about version updates and Trivy announcements
+
+Secret Flags
+      --secret-config string   specify a path to config file for secret scanning (default "trivy-secret.yaml")
+
+Registry Flags
+      --password strings        password. Comma-separated passwords allowed. TRIVY_PASSWORD should be used for security reasons.
+      --password-stdin          password from stdin. Comma-separated passwords are not supported.
+      --registry-token string   registry token
+      --username strings        username. Comma-separated usernames allowed.
+
+Vulnerability Flags
+      --ignore-status strings          comma-separated list of vulnerability status to ignore
+                                       Allowed values:
+                                         - unknown
+                                         - not_affected
+                                         - affected
+                                         - fixed
+                                         - under_investigation
+                                         - will_not_fix
+                                         - fix_deferred
+                                         - end_of_life
+      --ignore-unfixed                 display only fixed vulnerabilities
+      --skip-vex-repo-update           [EXPERIMENTAL] Skip VEX Repository update
+      --vex strings                    [EXPERIMENTAL] VEX sources ("repo", "oci" or file path)
+      --vuln-severity-source strings   order of data sources for selecting vulnerability severity level
+                                       Allowed values:
+                                         - nvd
+                                         - redhat
+                                         - redhat-oval
+                                         - debian
+                                         - ubuntu
+                                         - alpine
+                                         - amazon
+                                         - oracle-oval
+                                         - suse-cvrf
+                                         - photon
+                                         - arch-linux
+                                         - alma
+                                         - rocky
+                                         - cbl-mariner
+                                         - azure
+                                         - ruby-advisory-db
+                                         - php-security-advisories
+                                         - nodejs-security-wg
+                                         - ghsa
+                                         - glad
+                                         - aqua
+                                         - osv
+                                         - k8s
+                                         - wolfi
+                                         - chainguard
+                                         - bitnami
+                                         - govulndb
+                                         - echo
+                                         - minimos
+                                         - rootio
+                                         - auto
+                                        (default [auto])
+
+Global Flags:
+      --cache-dir string          cache directory (default "/root/.cache/trivy")
+  -c, --config string             config path (default "trivy.yaml")
+  -d, --debug                     debug mode
+      --generate-default-config   write the default config to trivy-default.yaml
+      --insecure                  allow insecure server connections
+  -q, --quiet                     suppress progress bar and log output
+      --timeout duration          timeout (default 5m0s)
+  -v, --version                   show version
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "serialNumber": "urn:uuid:qvs-pro-k8s-1758029447",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2025-09-16T13:30:47Z",
+    "tools": [
+      {
+        "vendor": "QVS-Pro",
+        "name": "qvs-pro-scanner",
+        "version": "2.0.0"
+      }
+    ],
+    "authors": [
+      {
+        "name": "QVS-Pro Scanner",
+        "email": "scanner@qvs-pro.com"
+      }
+    ],
+    "supplier": {
+      "name": "QVS-Pro",
+      "url": "https://qvs-pro.com"
+    }
+  },
+  "components": [
+    {
+      "type": "file",
+      "bom-ref": "file-0",
+      "name": "configmap/tls-config/crypto-config.yml (cbom)",
+      "scope": "required",
+      "crypto": {
+        "algorithm": "ECDH",
+        "purpose": "PublicKey",
+        "quantumSafe": false,
+        "quantumRisk": "Shor's Algorithm"
+      },
+      "evidence": {
+        "identity": [
+          {
+            "field": "source-code",
+            "confidence": 0.95,
+            "methods": [
+              "regex-pattern-matching",
+              "static-analysis"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "file",
+      "bom-ref": "file-1",
+      "name": "configmap/tls-config/nginx.conf (cbom)",
+      "scope": "required",
+      "crypto": {
+        "algorithm": "ECDSA",
+        "purpose": "PublicKey",
+        "quantumSafe": false,
+        "quantumRisk": "Shor's Algorithm"
+      },
+      "evidence": {
+        "identity": [
+          {
+            "field": "source-code",
+            "confidence": 0.95,
+            "methods": [
+              "regex-pattern-matching",
+              "static-analysis"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "findings": [
+    {
+      "file": "configmap/tls-config/crypto-config.yml (cbom)",
+      "algorithm": "ECDH",
+      "type": "PublicKey",
+      "line": 11,
+      "method": "Kubernetes ConfigMap Analysis",
+      "risk": "High",
+      "vulnerability_type": "Shor's Algorithm",
+      "description": "ConfigMap contains crypto configuration: Elliptic Curve Diffie-Hellman is vulnerable to quantum attacks on elliptic curve discrete logarithm",
+      "recommendation": "Replace with ML-KEM (CRYSTALS-Kyber) for quantum-resistant key exchange",
+      "quantum_resistant": false
+    },
+    {
+      "file": "configmap/tls-config/crypto-config.yml (cbom)",
+      "algorithm": "ECDSA",
+      "type": "PublicKey",
+      "line": 12,
+      "method": "Kubernetes ConfigMap Analysis",
+      "risk": "High",
+      "vulnerability_type": "Shor's Algorithm",
+      "description": "ConfigMap contains crypto configuration: ECDSA with P-256 curve is vulnerable to quantum attacks",
+      "recommendation": "Replace with ML-DSA (CRYSTALS-Dilithium) for quantum-resistant signatures",
+      "quantum_resistant": false
+    },
+    {
+      "file": "configmap/tls-config/nginx.conf (cbom)",
+      "algorithm": "ECDSA",
+      "type": "PublicKey",
+      "line": 6,
+      "method": "Kubernetes ConfigMap Analysis",
+      "risk": "High",
+      "vulnerability_type": "Shor's Algorithm",
+      "description": "ConfigMap contains crypto configuration: ECDSA (Elliptic Curve Digital Signature Algorithm) is vulnerable to quantum attacks",
+      "recommendation": "Replace with quantum-resistant signature schemes like ML-DSA or SLH-DSA",
+      "quantum_resistant": false
+    },
+    {
+      "file": "configmap/tls-config/nginx.conf (cbom)",
+      "algorithm": "ECDH",
+      "type": "PublicKey",
+      "line": 6,
+      "method": "Kubernetes ConfigMap Analysis",
+      "risk": "High",
+      "vulnerability_type": "Shor's Algorithm",
+      "description": "ConfigMap contains crypto configuration: Elliptic Curve Diffie-Hellman is vulnerable to quantum attacks on elliptic curve discrete logarithm",
+      "recommendation": "Replace with ML-KEM (CRYSTALS-Kyber) for quantum-resistant key exchange",
+      "quantum_resistant": false
+    },
+    {
+      "file": "configmap/tls-config/nginx.conf (cbom)",
+      "algorithm": "DSA",
+      "type": "PublicKey",
+      "line": 6,
+      "method": "Kubernetes ConfigMap Analysis",
+      "risk": "High",
+      "vulnerability_type": "Shor's Algorithm",
+      "description": "ConfigMap contains crypto configuration: DSA (Digital Signature Algorithm) is vulnerable to quantum attacks on discrete logarithm problem",
+      "recommendation": "Replace with ML-DSA (CRYSTALS-Dilithium) or SLH-DSA (SPHINCS+) for quantum-resistant signatures",
+      "quantum_resistant": false
+    },
+    {
+      "file": "configmap/tls-config/nginx.conf (cbom)",
+      "algorithm": "AES-256",
+      "type": "SymmetricKey",
+      "line": 6,
+      "method": "Kubernetes ConfigMap Analysis",
+      "risk": "Low",
+      "vulnerability_type": "Grover's Algorithm",
+      "description": "ConfigMap contains crypto configuration: AES-256 provides 128 bits of security against quantum attacks, which is excellent",
+      "recommendation": "AES-256 provides strong quantum resistance. No action needed",
+      "quantum_resistant": false
+    },
+    {
+      "file": "configmap/tls-config/nginx.conf (cbom)",
+      "algorithm": "SHA-256",
+      "type": "Hash",
+      "line": 6,
+      "method": "Kubernetes ConfigMap Analysis",
+      "risk": "Low",
+      "vulnerability_type": "Grover's Algorithm",
+      "description": "ConfigMap contains crypto configuration: SHA-256 provides 128 bits of security against quantum attacks, which is considered adequate",
+      "recommendation": "SHA-256 remains secure against known quantum attacks. Consider SHA-3 for new applications",
+      "quantum_resistant": false
+    },
+    {
+      "file": "configmap/tls-config/nginx.conf (cbom)",
+      "algorithm": "SHA-3",
+      "type": "Hash",
+      "line": 6,
+      "method": "Kubernetes ConfigMap Analysis",
+      "risk": "Low",
+      "vulnerability_type": "Grover's Algorithm",
+      "description": "ConfigMap contains crypto configuration: SHA-3 family provides strong security against quantum attacks",
+      "recommendation": "SHA-3 is quantum-resistant with appropriate output sizes. Recommended for new applications",
+      "quantum_resistant": false
+    }
+  ],
+  "summary": {
+    "total_assets": 3,
+    "vulnerable_assets": 5,
+    "quantum_safe_assets": 0,
+    "risk_breakdown": {
+      "High": 5,
+      "Low": 3
+    },
+    "algorithm_breakdown": {
+      "AES-256": 1,
+      "DSA": 1,
+      "ECDH": 2,
+      "ECDSA": 2,
+      "SHA-256": 1,
+      "SHA-3": 1
+    },
+    "scan_duration": ""
+  }
+}

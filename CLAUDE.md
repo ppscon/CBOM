@@ -4,20 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-QVS-CBOM is a quantum vulnerability scanner that generates CycloneDX-compliant CBOMs (Cryptography Bill of Materials). It works as a Docker wrapper around existing scanners (Trivy) and adds quantum-risk cryptography detection without disrupting existing workflows.
+Aqua-CBOM is a quantum vulnerability scanner that generates CycloneDX-compliant CBOMs (Cryptography Bill of Materials). It works as a Docker wrapper around existing scanners (Trivy) and adds quantum-risk cryptography detection without disrupting existing workflows.
 
 **Purpose**: Enable FIPS 140-3 compliance validation through automated cryptographic inventory and policy enforcement.
 
 ## Key Components
 
 ### Core Binaries
-- `qvs-cbom`: Linux ELF binary for quantum vulnerability scanning
-- `qvs-cbom-darwin`: macOS binary variant
+- `aqua-cbom`: Linux ELF binary for quantum vulnerability scanning
+- `aqua-cbom-darwin`: macOS binary variant
 - Both accept flags: `-mode` (file/k8s), `-dir`, `-namespace`, `-output-cbom`, `-json`
 
 ### Docker Integration
 - Base image: `aquasec/trivy:latest` with Docker CLI added
-- Wrapper script (`wrapper.sh`) intercepts `--CBOM` flag to trigger QVS-CBOM after Trivy scan
+- Wrapper script (`wrapper.sh`) intercepts `--CBOM` flag to trigger Aqua-CBOM after Trivy scan
 - Requires Docker socket mount: `-v /var/run/docker.sock:/var/run/docker.sock`
 - Environment variables:
   - `CBOM_CDX_TARGET=1.6` - Output CycloneDX 1.6 format
@@ -33,7 +33,7 @@ QVS-CBOM is a quantum vulnerability scanner that generates CycloneDX-compliant C
 1. **Trivy** performs standard vulnerability scan (exits with code)
 2. **Wrapper** intercepts `--CBOM` flag (preserves Trivy exit code)
 3. **Wrapper** extracts image filesystem (for image scans)
-4. **QVS-CBOM** analyzes and outputs CycloneDX CBOM with quantum-risk findings
+4. **Aqua-CBOM** analyzes and outputs CycloneDX CBOM with quantum-risk findings
 5. **REGO** (separate step) evaluates CBOM against FIPS compliance rules
 
 ## Common Commands
@@ -67,20 +67,20 @@ docker run -v /var/run/docker.sock:/var/run/docker.sock \
 
 ### Bare Metal Usage (macOS)
 ```bash
-./qvs-cbom-darwin -mode file -dir /path/to/scan -output-cbom
-./qvs-cbom-darwin -mode k8s -namespace default -output-cbom
+./aqua-cbom-darwin -mode file -dir /path/to/scan -output-cbom
+./aqua-cbom-darwin -mode k8s -namespace default -output-cbom
 ```
 
 ### CSV Conversion
 ```bash
-./qvs-cbom-csv.sh input.json --output report.csv
+./aqua-cbom-csv.sh input.json --output report.csv
 ```
 
 ## FIPS 140-3 Compliance Implementation
 
 ### Three-Layer Architecture
 
-1. **QVS-CBOM (Detection Layer)**
+1. **Aqua-CBOM (Detection Layer)**
    - Scans source code, binaries, and libraries for cryptographic algorithms
    - Provides NIST-based risk assessment (High/Medium/Low)
    - Identifies quantum-vulnerable algorithms
@@ -104,7 +104,7 @@ docker run -v /var/run/docker.sock:/var/run/docker.sock \
 ```
 1. Aqua Scanner (Image Assurance)
    ↓ (if pass)
-2. QVS-CBOM Generation (enhanced-scanner --CBOM)
+2. Aqua-CBOM Generation (enhanced-scanner --CBOM)
    ↓
 3. REGO Policy Evaluation (fips-compliance-cdx16.rego)
    ↓ (if pass - exit 0)
@@ -119,7 +119,7 @@ docker run -v /var/run/docker.sock:/var/run/docker.sock \
 
 ### Key Files
 
-- `wrapper.sh` - Docker wrapper that runs Trivy + QVS-CBOM
+- `wrapper.sh` - Docker wrapper that runs Trivy + Aqua-CBOM
 - `policies/fips-compliance-cdx16.rego` - FIPS compliance policy (OPA/REGO)
 - `fips-compliance-policies.tf` - Terraform configuration for Aqua policies
 - `workflows/cbom-fips-pipeline.yml` - GitHub Actions CI/CD pipeline
@@ -143,6 +143,6 @@ opa eval --data policies/fips-compliance-cdx16.rego \
 - The wrapper preserves the original scanner's exit code while running CBOM analysis
 - Custom CBOM commands can be set via `CBOM_COMMAND_TEMPLATE` environment variable
 - The wrapper handles image filesystem extraction transparently using Docker export
-- QVS-CBOM identifies weak cryptographic algorithms (MD5, SHA1, DES, etc.) and provides NIST categorization
-- Metadata branding: Vendor is "Aqua Security", tool name is "QVS-CBOM-Generator"
+- Aqua-CBOM identifies weak cryptographic algorithms (MD5, SHA1, DES, etc.) and provides NIST categorization
+- Metadata branding: Vendor is "Aqua Security", tool name is "Aqua-CBOM-Generator"
 - REGO and Aqua policies are **independent** - REGO runs in CI/CD, Aqua enforces at deployment/runtime

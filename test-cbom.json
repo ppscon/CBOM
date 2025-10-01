@@ -1,0 +1,36 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "serialNumber": "urn:uuid:qvs-pro-file-1758034696",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2025-09-16T14:58:16Z",
+    "tools": [
+      {
+        "vendor": "QVS-Pro",
+        "name": "qvs-pro-scanner",
+        "version": "2.0.0"
+      }
+    ],
+    "authors": [
+      {
+        "name": "QVS-Pro Scanner",
+        "email": "scanner@qvs-pro.com"
+      }
+    ],
+    "supplier": {
+      "name": "QVS-Pro",
+      "url": "https://qvs-pro.com"
+    }
+  },
+  "components": [],
+  "findings": null,
+  "summary": {
+    "total_assets": 0,
+    "vulnerable_assets": 0,
+    "quantum_safe_assets": 0,
+    "risk_breakdown": {},
+    "algorithm_breakdown": {},
+    "scan_duration": ""
+  }
+}

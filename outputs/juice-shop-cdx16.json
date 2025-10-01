@@ -1,14 +1,14 @@
 {
   "bomFormat": "CycloneDX",
-  "specVersion": "1.4",
-  "serialNumber": "urn:uuid:qvs-pro-file-1758380484",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:aqua-qvs-file-1759227595",
   "version": 1,
   "metadata": {
-    "timestamp": "2025-09-20T15:01:24Z",
+    "timestamp": "2025-09-30T10:19:55Z",
     "tools": [
       {
         "vendor": "Aqua Security",
-        "name": "Aqua CBOM",
+        "name": "QVS-CBOM-Generator",
         "version": "2.0.0"
       }
     ],
@@ -27,7 +27,7 @@
     {
       "type": "file",
       "bom-ref": "file-0",
-      "name": "/tmp/cbom-image-mgkohF/juice-shop/Gruntfile.js",
+      "name": "/tmp/cbom-image-mDIcfe/juice-shop/Gruntfile.js",
       "scope": "required",
       "crypto": {
         "algorithm": "MD5",
@@ -39,18 +39,37 @@
         "identity": [
           {
             "field": "source-code",
+            "confidence": 0.95,
             "methods": [
               "regex-pattern-matching",
               "static-analysis"
             ]
           }
         ]
-      }
+      },
+      "properties": [
+        {
+          "name": "cbom:algorithm",
+          "value": "MD5"
+        },
+        {
+          "name": "cbom:purpose",
+          "value": "Hash"
+        },
+        {
+          "name": "cbom:quantumRisk",
+          "value": "Grover's Algorithm + Broken"
+        },
+        {
+          "name": "cbom:quantumSafe",
+          "value": "false"
+        }
+      ]
     },
     {
       "type": "file",
       "bom-ref": "file-1",
-      "name": "/tmp/cbom-image-mgkohF/juice-shop/frontend/dist/frontend/989.js",
+      "name": "/tmp/cbom-image-mDIcfe/juice-shop/frontend/dist/frontend/989.js",
       "scope": "required",
       "crypto": {
         "algorithm": "SHA-3",
@@ -62,18 +81,37 @@
         "identity": [
           {
             "field": "source-code",
+            "confidence": 0.95,
             "methods": [
               "regex-pattern-matching",
               "static-analysis"
             ]
           }
         ]
-      }
+      },
+      "properties": [
+        {
+          "name": "cbom:algorithm",
+          "value": "SHA-3"
+        },
+        {
+          "name": "cbom:purpose",
+          "value": "Hash"
+        },
+        {
+          "name": "cbom:quantumRisk",
+          "value": "Grover's Algorithm"
+        },
+        {
+          "name": "cbom:quantumSafe",
+          "value": "false"
+        }
+      ]
     },
     {
       "type": "file",
       "bom-ref": "file-2",
-      "name": "/tmp/cbom-image-mgkohF/juice-shop/lib/insecurity.ts",
+      "name": "/tmp/cbom-image-mDIcfe/juice-shop/lib/insecurity.ts",
       "scope": "required",
       "crypto": {
         "algorithm": "MD5",
@@ -85,18 +123,37 @@
         "identity": [
           {
             "field": "source-code",
+            "confidence": 0.95,
             "methods": [
               "regex-pattern-matching",
               "static-analysis"
             ]
           }
         ]
-      }
+      },
+      "properties": [
+        {
+          "name": "cbom:algorithm",
+          "value": "MD5"
+        },
+        {
+          "name": "cbom:purpose",
+          "value": "Hash"
+        },
+        {
+          "name": "cbom:quantumRisk",
+          "value": "Grover's Algorithm + Broken"
+        },
+        {
+          "name": "cbom:quantumSafe",
+          "value": "false"
+        }
+      ]
     }
   ],
   "findings": [
     {
-      "file": "/tmp/cbom-image-mgkohF/juice-shop/Gruntfile.js",
+      "file": "/tmp/cbom-image-mDIcfe/juice-shop/Gruntfile.js",
       "algorithm": "MD5",
       "type": "Hash",
       "line": 77,
@@ -108,7 +165,7 @@
       "quantum_resistant": false
     },
     {
-      "file": "/tmp/cbom-image-mgkohF/juice-shop/frontend/dist/frontend/989.js",
+      "file": "/tmp/cbom-image-mDIcfe/juice-shop/frontend/dist/frontend/989.js",
       "algorithm": "SHA-3",
       "type": "Hash",
       "line": 1,
@@ -124,7 +181,7 @@
       "nist_table": "Table 7"
     },
     {
-      "file": "/tmp/cbom-image-mgkohF/juice-shop/lib/insecurity.ts",
+      "file": "/tmp/cbom-image-mDIcfe/juice-shop/lib/insecurity.ts",
       "algorithm": "MD5",
       "type": "Hash",
       "line": 43,

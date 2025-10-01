@@ -1,0 +1,156 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.4",
+  "serialNumber": "urn:uuid:aqua-qvs-file-1759325413",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2025-10-01T13:30:13Z",
+    "tools": [
+      {
+        "vendor": "Aqua Security",
+        "name": "QVS-CBOM-Generator",
+        "version": "2.0.0"
+      }
+    ],
+    "authors": [
+      {
+        "name": "Aqua Security",
+        "email": "support@aquasec.com"
+      }
+    ],
+    "supplier": {
+      "name": "Aqua Security",
+      "url": "https://www.aquasec.com"
+    }
+  },
+  "components": [
+    {
+      "type": "file",
+      "bom-ref": "file-0",
+      "name": "/tmp/cbom-image-MjnCdl/juice-shop/Gruntfile.js",
+      "scope": "required",
+      "crypto": {
+        "algorithm": "MD5",
+        "purpose": "Hash",
+        "quantumSafe": false,
+        "quantumRisk": "Grover's Algorithm + Broken"
+      },
+      "evidence": {
+        "identity": [
+          {
+            "field": "source-code",
+            "confidence": 0.95,
+            "methods": [
+              "regex-pattern-matching",
+              "static-analysis"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "file",
+      "bom-ref": "file-1",
+      "name": "/tmp/cbom-image-MjnCdl/juice-shop/frontend/dist/frontend/989.js",
+      "scope": "required",
+      "crypto": {
+        "algorithm": "SHA-3",
+        "purpose": "Hash",
+        "quantumSafe": false,
+        "quantumRisk": "Grover's Algorithm"
+      },
+      "evidence": {
+        "identity": [
+          {
+            "field": "source-code",
+            "confidence": 0.95,
+            "methods": [
+              "regex-pattern-matching",
+              "static-analysis"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "file",
+      "bom-ref": "file-2",
+      "name": "/tmp/cbom-image-MjnCdl/juice-shop/lib/insecurity.ts",
+      "scope": "required",
+      "crypto": {
+        "algorithm": "MD5",
+        "purpose": "Hash",
+        "quantumSafe": false,
+        "quantumRisk": "Grover's Algorithm + Broken"
+      },
+      "evidence": {
+        "identity": [
+          {
+            "field": "source-code",
+            "confidence": 0.95,
+            "methods": [
+              "regex-pattern-matching",
+              "static-analysis"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "findings": [
+    {
+      "file": "/tmp/cbom-image-MjnCdl/juice-shop/Gruntfile.js",
+      "algorithm": "MD5",
+      "type": "Hash",
+      "line": 77,
+      "method": "Function Name",
+      "risk": "High",
+      "vulnerability_type": "Grover's Algorithm + Broken",
+      "description": "MD5 is cryptographically broken and provides only 64 bits of security against quantum attacks",
+      "recommendation": "Replace with SHA-256 or SHA-3 for non-cryptographic uses, or BLAKE3 for performance-critical applications",
+      "quantum_resistant": false
+    },
+    {
+      "file": "/tmp/cbom-image-MjnCdl/juice-shop/frontend/dist/frontend/989.js",
+      "algorithm": "SHA-3",
+      "type": "Hash",
+      "line": 1,
+      "method": "Function Name",
+      "risk": "Low",
+      "vulnerability_type": "Grover's Algorithm",
+      "description": "SHA-3 family provides strong security against quantum attacks",
+      "recommendation": "SHA-3 is quantum-resistant with appropriate output sizes. Recommended for new applications",
+      "nist_category": "2",
+      "quantum_resistant": true,
+      "nist_algorithm_id": "SHA3-256",
+      "security_strength": 128,
+      "nist_table": "Table 7"
+    },
+    {
+      "file": "/tmp/cbom-image-MjnCdl/juice-shop/lib/insecurity.ts",
+      "algorithm": "MD5",
+      "type": "Hash",
+      "line": 43,
+      "method": "Function Name",
+      "risk": "High",
+      "vulnerability_type": "Grover's Algorithm + Broken",
+      "description": "MD5 is cryptographically broken and provides only 64 bits of security against quantum attacks",
+      "recommendation": "Replace with SHA-256 or SHA-3 for non-cryptographic uses, or BLAKE3 for performance-critical applications",
+      "quantum_resistant": false
+    }
+  ],
+  "summary": {
+    "total_assets": 628,
+    "vulnerable_assets": 2,
+    "quantum_safe_assets": 1,
+    "risk_breakdown": {
+      "High": 2,
+      "Low": 1
+    },
+    "algorithm_breakdown": {
+      "MD5": 2,
+      "SHA-3": 1
+    },
+    "scan_duration": ""
+  }
+}

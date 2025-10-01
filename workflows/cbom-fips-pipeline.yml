@@ -94,7 +94,7 @@ jobs:
           path: /tmp/aqua-scan.json
 
   # ============================================
-  # Stage 3: QVS-CBOM Generation
+  # Stage 3: Aqua-CBOM Generation
   # ============================================
   generate_cbom:
     runs-on: ubuntu-latest
@@ -232,11 +232,11 @@ jobs:
           path: ./cbom
 
       - name: Make CSV script executable
-        run: chmod +x qvs-cbom-csv.sh
+        run: chmod +x aqua-cbom-csv.sh
 
       - name: Generate CSV Report
         run: |
-          ./qvs-cbom-csv.sh cbom/cbom.json --output cbom-report.csv
+          ./aqua-cbom-csv.sh cbom/cbom.json --output cbom-report.csv
 
       - name: Upload CSV Report
         uses: actions/upload-artifact@v4

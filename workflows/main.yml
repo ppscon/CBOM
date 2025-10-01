@@ -1,0 +1,544 @@
+name: CI/CD Pipeline with Aqua Security Scan and SBOM
+
+# Updated 2025-05-13: Added process_index_page.py to handle variables in the index page
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  run_unit_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+        working-directory: ./app
+      - run: npm test
+        working-directory: ./app
+
+  build_image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Print GitHub actor and repository
+        run: |
+          echo "GitHub actor: ${{ github.actor }}"
+          echo "GitHub repository: ${{ github.repository }}"
+
+      - name: Check Docker version
+        run: docker --version
+
+      - name: Verify CI_TOKEN (first 5 chars)
+        run: echo "${{ secrets.CI_TOKEN }}" | head -c 5
+
+      - id: docker-login
+        run: echo "${{ secrets.CI_TOKEN }}" | docker login ghcr.io -u ppscon --password-stdin
+
+      - name: Build and Push Docker Image
+        run: |
+          IMAGE_NAME="bakery-app"
+          docker build --label "com.aqua.security.policy=immutable" -t ghcr.io/ppscon/bakery/$IMAGE_NAME:${{ github.sha }} .
+          docker push ghcr.io/ppscon/bakery/$IMAGE_NAME:${{ github.sha }}
+
+  aqua_scan:
+      runs-on: ubuntu-latest
+      needs: build_image
+      env:
+        DOCKER_AUTH_CONFIG: ${{ secrets.DOCKER_AUTH_CONFIG }}
+        IMAGE_NAME: "bakery-app"
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            persist-credentials: false
+        - run: echo $DOCKER_AUTH_CONFIG > /home/runner/.docker/config.json
+        - id: docker-pull-scanner
+          run: docker pull registry.aquasec.com/scanner:2022.4
+        - name: Run Aqua Security Scan
+          run: |
+            IMAGE_TAG=ghcr.io/ppscon/bakery/$IMAGE_NAME:${{ github.sha }}
+            docker run --rm -v $(pwd)/artifacts:/artifacts --entrypoint="" registry.aquasec.com/scanner:2022.4 /opt/aquasec/scannercli scan -H ${{ secrets.AQUA_SERVER }} --token ${{ secrets.AQUA_TOKEN }} --registry "Github" $IMAGE_TAG --show-negligible --register-compliant --htmlfile /artifacts/aqua-scan.html --jsonfile /artifacts/aqua-scan.json
+        - name: Upload Aqua Reports as Artifacts
+          if: always()  # Ensures this step runs even if previous steps fails
+          uses: actions/upload-artifact@v4
+          with:
+            name: aqua-reports
+            path: artifacts/
+
+  filter_aqua_reports:
+    runs-on: ubuntu-latest
+    needs: aqua_scan
+    if: always()  # This ensures the job runs even if aqua_scan fails
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: pip install beautifulsoup4
+      - name: Download Aqua Reports
+        uses: actions/download-artifact@v4
+        with:
+          name: aqua-reports
+          path: artifacts/
+      # Copy the modified filtering scripts from this PR
+      - name: Filter ignored vulnerabilities
+        run: |
+          # Create a copy of the config file for reference
+          cat > ci_scripts/ignored_cves_config.json << 'EOL'
+          {
+            "ignored_cves": [
+              "CVE-2025-27789",
+              "CVE-2024-45590"
+            ],
+            "comment": "These CVEs have been marked as ignored in the Aqua UI"
+          }
+          EOL
+          # List all filter scripts for debugging
+          echo "=== Available Filter Scripts ==="
+          ls -la ci_scripts/filter*.py
+          echo "=============================="
+          
+          # Use explicit CVE list to avoid any configuration issues
+          echo "=== Running filter_aqua_reports.py ==="
+          python ci_scripts/filter_aqua_reports.py --input-dir artifacts --output-dir filtered-artifacts --ignored-cves CVE-2025-27789 CVE-2024-45590
+          
+          # Add debugging info about the filtered output
+          echo "=== FILTERED OUTPUT DEBUG INFO ==="
+          ls -la filtered-artifacts/
+          echo "Checking if ignored CVEs are still present in the JSON:"
+          grep -c "CVE-2025-27789\|CVE-2024-45590" filtered-artifacts/aqua-scan-filtered.json || echo "No matches found (this is good)"
+          echo "Checking if ignored CVEs are still present in the HTML:"
+          grep -c "CVE-2025-27789\|CVE-2024-45590" filtered-artifacts/aqua-scan-filtered.html || echo "No matches found (this is good)"
+          echo "==================================="
+      - name: Create elegant report
+        run: python ci_scripts/create_elegant_report.py filtered-artifacts/aqua-scan-filtered.json filtered-artifacts/elegant-report.html
+      - name: Upload Filtered Aqua Reports as Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqua-filtered-reports
+          path: filtered-artifacts/
+
+  filter_high_critical_vulnerabilities:
+    runs-on: ubuntu-latest
+    needs: aqua_scan
+    if: always()  # This ensures the job runs even if aqua_scan fails
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: pip install beautifulsoup4
+      - name: Download Aqua Reports
+        uses: actions/download-artifact@v4
+        with:
+          name: aqua-reports
+          path: artifacts/
+      - name: Filter only high and critical vulnerabilities
+        run: |
+          echo "=== Filtering for HIGH and CRITICAL vulnerabilities only ==="
+          python ci_scripts/filter_aqua_reports.py --input-dir artifacts --output-dir high-critical-artifacts --severity-filter high critical
+          
+          # Add debugging info about the severity filtered output
+          echo "=== HIGH/CRITICAL FILTERED OUTPUT DEBUG INFO ==="
+          ls -la high-critical-artifacts/
+          echo "Checking severity levels in the JSON:"
+          cat high-critical-artifacts/aqua-scan-filtered.json | python3 -c "import json, sys; data=json.load(sys.stdin); severities=set(); [severities.add(v.get('aqua_severity', v.get('nvd_severity_v3', 'unknown'))) for r in data.get('resources', []) for v in r.get('vulnerabilities', [])]; [severities.add(v.get('aqua_severity', v.get('nvd_severity_v3', 'unknown'))) for v in data.get('vulnerabilities', [])]; print('Found severities:', severities)"
+          echo "==================================="
+      - name: Create elegant report for high/critical vulnerabilities
+        run: python ci_scripts/create_elegant_report.py high-critical-artifacts/aqua-scan-filtered.json high-critical-artifacts/elegant-report.html
+      - name: Upload High/Critical Filtered Reports as Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqua-high-critical-reports
+          path: high-critical-artifacts/
+
+  assign_task:
+    runs-on: ubuntu-latest
+    needs: [filter_aqua_reports, filter_high_critical_vulnerabilities]
+    if: always()  # This ensures the job runs even if filter_aqua_reports fails
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install requests
+        run: pip install requests
+      - name: Run assign task script
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: python ci_scripts/assign_task.py
+
+  notify_teams:
+    runs-on: ubuntu-latest
+    needs: assign_task
+    if: always()  # This ensures the job runs even if assign_task fails
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Download Filtered Aqua Reports
+        uses: actions/download-artifact@v4
+        with:
+          name: aqua-filtered-reports
+          path: artifacts/
+      - name: Install requests
+        run: pip install requests
+      - name: Notify Teams
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+        run: python ci_scripts/assign_task.py
+
+  generate_sbom:
+    runs-on: ubuntu-latest
+    needs: [aqua_scan]
+    container:
+      image: aquasec/aqua-scanner:latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+    - name: Generate SBOM using Aqua
+      run: |
+        # Set Billy server URL
+        export BILLY_SERVER=https://billy.dev-aqua.codesec.aquasec.com
+
+        # Download and verify install script
+        curl -sLo install.sh download.codesec.aquasec.com/billy/install.sh
+        curl -sLo install.sh.checksum https://github.com/argonsecurity/releases/releases/latest/download/install.sh.checksum
+        if ! cat install.sh.checksum | sha256sum ; then
+          echo "install.sh checksum failed"
+          exit 1
+        fi
+
+        # Install Billy
+        BINDIR="." sh install.sh
+        rm install.sh install.sh.checksum
+
+        # Generate SBOM
+        ./billy generate \
+          --access-token "${{ secrets.CI_TOKEN }}" \
+          --aqua-key "${{ secrets.AQUA_KEY }}" \
+          --aqua-secret "${{ secrets.AQUA_SECRET }}" \
+          --cspm-url https://stage.api.cloudsploit.com \
+          --artifact-path "$GITHUB_WORKSPACE" \
+          --package-json \
+          --sast \
+          --reachability
+
+  sign_image:
+    runs-on: ubuntu-latest
+    needs: generate_sbom
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@v3.1.2
+    - name: Docker Login
+      run: echo "${{ secrets.CI_TOKEN }}" | docker login ghcr.io -u ppscon --password-stdin
+    - name: Pull Docker Image
+      run: docker pull ghcr.io/ppscon/bakery/bakery-app:${{ github.sha }}
+    - name: Save Cosign Private Key
+      run: echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
+    - name: Sign the Docker Image
+      env:
+        COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+      run: |
+        IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/ppscon/bakery/bakery-app:${{ github.sha }})
+        cosign sign --key cosign.key $IMAGE_DIGEST
+
+  verify_image:
+    runs-on: ubuntu-latest
+    needs: sign_image # Ensure this job runs after the image has been signed
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Install Cosign
+      - name: Install Cosign
+        run: |
+          wget https://github.com/sigstore/cosign/releases/download/v1.3.0/cosign-linux-amd64
+          chmod +x cosign-linux-amd64
+          sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+
+      # Docker Login
+      - name: Docker Login
+        run: echo "${{ secrets.CI_TOKEN }}" | docker login ghcr.io -u ppscon --password-stdin
+
+      # Pull the Docker Image
+      - name: Pull Docker Image
+        run: docker pull ghcr.io/ppscon/bakery/bakery-app:${{ github.sha }}
+
+      # Save the Cosign Public Key
+      - name: Save Cosign Public Key
+        run: echo "${{ secrets.COSIGN_PUBLIC_KEY }}" > cosign.pub
+
+      # Verify the Docker Image
+      - name: Verify the Docker Image
+        run: |
+          IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/ppscon/bakery/bakery-app:${{ github.sha }})
+          cosign verify --key cosign.pub $IMAGE_DIGEST
+
+  record_metadata:
+      runs-on: ubuntu-latest
+      needs: verify_image
+      container:
+        image: python:3.9
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Generate Timestamp and Signature Placeholder
+          run: |
+            date +%s > timestamp_file.txt
+            echo "PlaceholderSignature" > signature_file.txt  # This will act as a placeholder
+
+        - name: Run Python Script to Generate Metadata
+          run: python3 ci_scripts/generate_metadata_artifact.py signature_file.txt timestamp_file.txt metadata_artifact  # Added signature_file.txt as a placeholder
+
+        - name: Upload Metadata Artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: metadata-artifact
+            path: |
+              metadata_artifact.json
+              metadata_artifact.html
+
+  publish_to_gh_pages:
+        runs-on: ubuntu-latest
+        needs: record_metadata # Assuming this job runs after metadata recording
+        steps:
+          - name: Checkout code
+            uses: actions/checkout@v4
+
+          - name: Download Metadata Artifact
+            uses: actions/download-artifact@v4
+            with:
+              name: metadata-artifact
+              path: ./metadata
+
+          - name: Download Filtered Aqua Reports
+            uses: actions/download-artifact@v4
+            with:
+              name: aqua-filtered-reports
+              path: ./security-reports
+          
+          - name: Download High/Critical Filtered Reports
+            uses: actions/download-artifact@v4
+            with:
+              name: aqua-high-critical-reports
+              path: ./security-reports/high-critical
+
+          - name: Create index page for reports
+            run: |
+              mkdir -p ./security-reports
+              cat > ./security-reports/index.html << 'EOL'
+              <!DOCTYPE html>
+              <html lang="en">
+              <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Bakery Project Security Reports</title>
+                <style>
+                  body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    color: #333;
+                    background-color: #f8f9fa;
+                  }
+                  h1 {
+                    border-bottom: 2px solid #3498db;
+                    padding-bottom: 10px;
+                    color: #2c3e50;
+                  }
+                  .report-card {
+                    border: 1px solid #ddd;
+                    border-radius: 5px;
+                    padding: 20px;
+                    margin-bottom: 20px;
+                    background: white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    transition: transform 0.3s ease;
+                  }
+                  .report-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+                  }
+                  .report-title {
+                    margin-top: 0;
+                    color: #2980b9;
+                  }
+                  .report-date {
+                    color: #7f8c8d;
+                    font-size: 0.9em;
+                    margin-bottom: 15px;
+                  }
+                  .report-link {
+                    display: inline-block;
+                    background: #3498db;
+                    color: white;
+                    padding: 8px 16px;
+                    text-decoration: none;
+                    border-radius: 4px;
+                    transition: background 0.3s ease;
+                    margin-right: 8px;
+                    margin-bottom: 8px;
+                  }
+                  .report-link:hover {
+                    background: #2980b9;
+                  }
+                  .report-link.elegant {
+                    background: #27ae60;
+                  }
+                  .report-link.elegant:hover {
+                    background: #219653;
+                  }
+                  .report-link.raw {
+                    background: #7f8c8d;
+                  }
+                  .report-link.raw:hover {
+                    background: #6c7a89;
+                  }
+                  .badge {
+                    display: inline-block;
+                    padding: 3px 8px;
+                    border-radius: 3px;
+                    font-size: 0.8em;
+                    margin-right: 8px;
+                    color: white;
+                  }
+                  .badge-filtered {
+                    background-color: #27ae60;
+                  }
+                  .card-description {
+                    margin-bottom: 20px;
+                  }
+                  .header-container {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                  }
+                  .build-info {
+                    background-color: #f1f8ff;
+                    border-left: 4px solid #3498db;
+                    padding: 10px 15px;
+                    margin-bottom: 30px;
+                    font-size: 0.9em;
+                  }
+                </style>
+              </head>
+              <body>
+                <div class="header-container">
+                  <h1>Bakery Project Security Reports</h1>
+                  <span class="badge badge-filtered">FILTERED</span>
+                </div>
+                
+                <div class="build-info">
+                  <p><strong>Repository:</strong> ppscon/bakery</p>
+                  <p><strong>Commit:</strong> ${GITHUB_SHA}</p>
+                  <p><strong>Build Date:</strong> $(date)</p>
+                </div>
+                
+                <div class="report-card">
+                  <h2 class="report-title">
+                    <span class="badge badge-filtered">FILTERED</span>
+                    Aqua Security Scan - Ignored CVEs Removed
+                  </h2>
+                  <div class="report-date">Generated: $(date)</div>
+                  <p class="card-description">This security scan report has been filtered to remove ignored vulnerabilities (CVE-2025-27789, CVE-2024-45590), providing a clean view of actionable security issues.</p>
+                  
+                  <a href="elegant-report.html" class="report-link elegant">View Elegant Report</a>
+                  <a href="aqua-scan-filtered.html" class="report-link">View HTML Report</a>
+                  <a href="aqua-scan-filtered.json" class="report-link raw">Download JSON Data</a>
+                </div>
+                
+                <div class="report-card">
+                  <h2 class="report-title">
+                    <span class="badge badge-filtered" style="background-color: #e74c3c;">HIGH/CRITICAL ONLY</span>
+                    Aqua Security Scan - High & Critical Vulnerabilities
+                  </h2>
+                  <div class="report-date">Generated: $(date)</div>
+                  <p class="card-description">This report shows ONLY high and critical severity vulnerabilities, filtering out all low and medium severity issues to focus on the most important security concerns.</p>
+                  
+                  <a href="high-critical/elegant-report.html" class="report-link elegant">View Elegant Report</a>
+                  <a href="high-critical/aqua-scan-filtered.html" class="report-link">View HTML Report</a>
+                  <a href="high-critical/aqua-scan-filtered.json" class="report-link raw">Download JSON Data</a>
+                </div>
+              </body>
+              </html>
+              EOL
+              
+              # Install required dependencies
+              pip install beautifulsoup4 
+              
+              # Process the index.html file to replace variables
+              python3 ci_scripts/process_index_page.py ./security-reports/index.html ./security-reports/index.html
+              
+              # Debug info for pages deployment
+              echo "=== GITHUB PAGES DEPLOYMENT DEBUG INFO ==="
+              echo "Security reports directory contents:"
+              ls -la ./security-reports/
+              echo "Current commit: ${GITHUB_SHA}"
+              echo "Process index page output:"
+              cat ./security-reports/index.html | grep -A 2 "Commit:"
+              echo "============================================"
+
+          - name: Deploy to GitHub Pages
+            uses: peaceiris/actions-gh-pages@v4
+            with:
+              github_token: ${{ secrets.CI_TOKEN }}
+              publish_dir: ./security-reports
+              publish_branch: gh-pages
+              force_orphan: true
+              commit_message: "Deploy security reports from ${{ github.sha }}"
+
+  promote_to_aws_ecr:
+    runs-on: ubuntu-latest
+    needs: publish_to_gh_pages  # Add other dependencies as needed
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Docker login to GHCR
+    - name: Docker Login to GHCR
+      run: echo "${{ secrets.CI_TOKEN }}" | docker login ghcr.io -u ppscon --password-stdin
+
+    # Pull the image from GitHub Container Registry
+    - name: Pull Docker Image from GHCR
+      run: docker pull ghcr.io/ppscon/bakery/bakery-app:${{ github.sha }}
+
+    # Tag and Push the image to AWS ECR
+    - name: Tag and Push to AWS ECR
+      run: |
+        docker tag ghcr.io/ppscon/bakery/bakery-app:${{ github.sha }} 633291361733.dkr.ecr.eu-west-2.amazonaws.com/image-bakery:${{ github.sha }}
+        aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 633291361733.dkr.ecr.eu-west-2.amazonaws.com
+        docker push 633291361733.dkr.ecr.eu-west-2.amazonaws.com/image-bakery:${{ github.sha }}
