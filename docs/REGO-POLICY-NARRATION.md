@@ -96,11 +96,11 @@ Container Image (in CI/CD pipeline)
 
 ---
 
-## Part 1: Terraform Policies - The Foundation
+## Part 1: Aqua Policies - The Foundation
 
-### What Terraform Policies Do
+### What Aqua Policies Do
 
-The Terraform policies establish the **security boundaries** for FIPS-compliant workloads:
+The Aqua policies (configured via Terraform as infrastructure-as-code) establish the **security boundaries** for FIPS-compliant workloads:
 
 **Image Assurance Policy**:
 ```hcl
@@ -140,9 +140,9 @@ resource "aquasec_kubernetes_assurance_policy" "fips_k8s_compliance" {
 
 **Key Point**: This prevents cryptographic keys from being stored insecurely. But it doesn't validate if the keys are for FIPS-approved algorithms - REGO handles that.
 
-### What Terraform CANNOT Do
+### What Aqua Policies CANNOT Do
 
-Terraform policies are excellent at:
+Aqua policies are excellent at:
 - ✅ Blocking privileged containers
 - ✅ Enforcing read-only filesystems
 - ✅ Monitoring file changes
@@ -295,7 +295,7 @@ violations[msg] {
 **Narration**:
 "QVS-CBOM provides the expert cryptographic analysis - it tells you what's risky and why. REGO lets you define YOUR organization's acceptance criteria. Maybe you're more strict than NIST, or maybe you need exceptions during a migration period. REGO enforces YOUR rules, not just generic standards."
 
-**Note**: This runs in CI/CD, completely separate from Terraform. If REGO fails, the image never reaches the registry where Terraform policies would evaluate it.
+**Note**: This runs in CI/CD, completely separate from Aqua's Image Assurance. If REGO fails, the image never reaches the registry where Aqua Image Assurance would scan it.
 
 #### 2. Context-Aware Policy Enforcement
 
@@ -376,8 +376,8 @@ quantum_warnings[msg] {
 **Narration**:
 "QVS-CBOM does the expert cryptographic risk assessment. REGO translates that into organizational action. You decide: 'Block High-risk today, but give us warnings for quantum vulnerability so we can plan a 5-year migration.' REGO enforces YOUR risk tolerance, using QVS-CBOM's expert analysis as input."
 
-**Connection to Terraform**:
-The Kubernetes Policy can enforce different controls based on risk:
+**Connection to Aqua**:
+Aqua's Kubernetes Policy can enforce different controls based on risk labels:
 ```hcl
 required_labels = [
   {
@@ -507,7 +507,7 @@ FIPS 140-3 adopts ISO/IEC 19790 and 24759 standards, providing international rec
 Step 1: Image Build (CI/CD)
     ↓
 Step 2: Aqua Scanner (CI/CD)
-    → Enforces: Image Assurance Policy (configured via Terraform)
+    → Enforces: Image Assurance Policy
     → Checks: Vulnerabilities, CIS benchmarks, licenses, packages
     → If FAIL: Pipeline stops
     ↓
@@ -526,7 +526,7 @@ Step 5: If ALL CI/CD checks pass: Image pushed to registry
 Step 6: Deployment Attempt to Kubernetes
     ↓
 Step 7: Aqua Admission Controller (deployment-time)
-    → Enforces: Kubernetes Assurance Policy (configured via Terraform)
+    → Enforces: Kubernetes Assurance Policy
     → Check: Required labels present?
     → Check: Privileged containers blocked?
     → Check: Secrets properly stored?
@@ -535,7 +535,7 @@ Step 7: Aqua Admission Controller (deployment-time)
 Step 8: If deployment allowed: Container runs
     ↓
 Step 9: Aqua Runtime Protection (continuous monitoring)
-    → Enforces: Container Runtime Policy (configured via Terraform)
+    → Enforces: Container Runtime Policy
     → Monitor: File integrity of FIPS modules
     → Monitor: Package installations
     → Monitor: Executable launches
@@ -544,10 +544,11 @@ Step 9: Aqua Runtime Protection (continuous monitoring)
 ```
 
 **Key Points**:
-- REGO and Terraform policies are **independent** - they don't feed into each other
+- REGO and Aqua policies are **independent** - they don't feed into each other
 - REGO runs in **CI/CD pipeline** as a quality gate
-- Terraform policies are **enforced by Aqua platform** at different stages
+- Aqua policies are **enforced by Aqua platform** at different stages (Image Assurance → K8s Admission → Runtime)
 - Both provide complementary protection layers
+- Terraform is just the IaC tool for managing Aqua policy configuration
 
 ---
 
@@ -708,9 +709,9 @@ REGO successfully blocks the CI/CD pipeline. But if someone bypasses CI/CD or pu
 
 REGO is a CI/CD gate. You still need Aqua platform for defense-in-depth.
 
-### Terraform Alone Is Not Enough
+### Aqua Policies Alone Are Not Enough
 
-**Without QVS-CBOM and REGO**, Terraform has no cryptographic intelligence:
+**Without QVS-CBOM and REGO**, Aqua policies have no cryptographic intelligence:
 
 ```hcl
 # This blocks privileged containers:
@@ -723,12 +724,12 @@ limit_container_privileges { privileged = true }
 ```
 
 **Example Failure**:
-A container runs as non-root, has read-only filesystem, no host network access - passes all Terraform checks. But internally it uses MD5 for password hashing. **FIPS VIOLATION UNDETECTED.**
+A container runs as non-root, has read-only filesystem, no host network access - passes all Aqua infrastructure checks. But internally it uses MD5 for password hashing. **FIPS VIOLATION UNDETECTED.**
 
 ### Together They Provide Defense in Depth
 
-| Layer | QVS-CBOM | REGO | Aqua Platform (via Terraform) | Combined |
-|-------|----------|------|-------------------------------|----------|
+| Layer | QVS-CBOM | REGO | Aqua Security | Combined |
+|-------|----------|------|---------------|----------|
 | **Crypto Detection** | ✅ Expert analysis | ❌ | ❌ | ✅ Finds all algorithms |
 | **Risk Assessment** | ✅ NIST standards | ❌ | ❌ | ✅ Knows what's weak |
 | **CI/CD Gate** | ❌ | ✅ Exit 0/1 | ❌ | ✅ Pipeline blocking |
