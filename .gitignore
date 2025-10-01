@@ -4,9 +4,11 @@
 *.so
 *.dylib
 
-# Test files
+# Test files and outputs
 test_*
 *.log
+demo-outputs/
+outputs/
 
 # OS
 .DS_Store
@@ -14,6 +16,44 @@ Thumbs.db
 
 # Documentation (managed outside the repo)
 docs/
+*.md
+!README.md
+!DEMO-GUIDE.md
 
-# IDE
+# IDE and development
 .idea/
+.claude/
+.mcp.json
+
+# Terraform and infrastructure
+*.tf
+*.tfstate
+*.tfstate.backup
+.terraform/
+terraform.tfvars
+variables.tf
+imports.tf
+main.tf
+setenv.sh
+
+# Policies and workflows (internal only)
+policies/
+workflows/
+
+# Kubernetes manifests (internal testing)
+k8s-demo-workloads*.yaml
+
+# Build artifacts
+*.json
+!package.json
+*.csv
+
+# Scripts (keep only essentials)
+demo-validate.sh
+test-*.sh
+json-to-csv.sh
+docker-run-csv.sh
+cleanup.sh
+
+# Validation tools
+tools/
