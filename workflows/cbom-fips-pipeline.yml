@@ -1,0 +1,423 @@
+name: FIPS 140-3 CBOM Compliance Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+env:
+  IMAGE_NAME: "cbom-demo-app"
+  REGISTRY: ghcr.io
+  AQUA_SERVER: ${{ secrets.AQUA_SERVER }}
+  AQUA_TOKEN: ${{ secrets.AQUA_TOKEN }}
+
+jobs:
+  # ============================================
+  # Stage 1: Build Container Image
+  # ============================================
+  build_image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=ref,event=branch
+            type=ref,event=pr
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================
+  # Stage 2: Aqua Image Assurance Scan
+  # ============================================
+  aqua_image_assurance:
+    runs-on: ubuntu-latest
+    needs: build_image
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Aqua Scanner (Image Assurance)
+        run: |
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            registry.aquasec.com/scanner:2022.4 \
+            /opt/aquasec/scannercli scan \
+            -H ${{ env.AQUA_SERVER }} \
+            --token ${{ env.AQUA_TOKEN }} \
+            --registry "Github" \
+            $IMAGE_TAG \
+            --show-negligible \
+            --register-compliant \
+            --jsonfile /tmp/aqua-scan.json
+
+      - name: Upload Aqua Scan Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqua-image-assurance-report
+          path: /tmp/aqua-scan.json
+
+  # ============================================
+  # Stage 3: QVS-CBOM Generation
+  # ============================================
+  generate_cbom:
+    runs-on: ubuntu-latest
+    needs: aqua_image_assurance
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build enhanced-scanner with CBOM wrapper
+        run: |
+          docker build -t enhanced-scanner:local .
+
+      - name: Generate CBOM
+        env:
+          CBOM_CDX_TARGET: "1.6"
+          CBOM_OUTPUT_FILE: "/out/cbom.json"
+        run: |
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          mkdir -p outputs
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/outputs":/out \
+            -e CBOM_CDX_TARGET=1.6 \
+            -e CBOM_OUTPUT_FILE=/out/cbom.json \
+            enhanced-scanner:local --CBOM image $IMAGE_TAG
+
+      - name: Upload CBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbom-cyclonedx-1.6
+          path: outputs/cbom.json
+
+      - name: Display CBOM Summary
+        run: |
+          echo "=== CBOM Generation Summary ==="
+          jq -r '.summary' outputs/cbom.json
+          echo ""
+          echo "Total Assets: $(jq -r '.summary.total_assets' outputs/cbom.json)"
+          echo "Vulnerable Assets: $(jq -r '.summary.vulnerable_assets' outputs/cbom.json)"
+          echo "Quantum Safe Assets: $(jq -r '.summary.quantum_safe_assets' outputs/cbom.json)"
+
+  # ============================================
+  # Stage 4: REGO Policy Evaluation (FIPS Compliance Gate)
+  # ============================================
+  rego_fips_compliance:
+    runs-on: ubuntu-latest
+    needs: generate_cbom
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download CBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: cbom-cyclonedx-1.6
+          path: ./cbom
+
+      - name: Install OPA
+        run: |
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+          chmod +x opa
+          sudo mv opa /usr/local/bin/
+
+      - name: Evaluate FIPS Compliance Policy
+        id: rego_eval
+        run: |
+          echo "=== REGO Policy Evaluation ==="
+
+          # Check for deny violations
+          DENY_OUTPUT=$(opa eval --data policies/fips-compliance-cdx16.rego \
+            --input cbom/cbom.json \
+            --format pretty \
+            'data.fips_compliance_cdx16.deny')
+
+          echo "$DENY_OUTPUT"
+
+          # Check for warnings
+          WARN_OUTPUT=$(opa eval --data policies/fips-compliance-cdx16.rego \
+            --input cbom/cbom.json \
+            --format pretty \
+            'data.fips_compliance_cdx16.warn')
+
+          echo ""
+          echo "=== Warnings (Non-blocking) ==="
+          echo "$WARN_OUTPUT"
+
+          # Fail if deny rules triggered
+          DENY_COUNT=$(echo "$DENY_OUTPUT" | jq '. | length')
+          if [ "$DENY_COUNT" -gt 0 ]; then
+            echo ""
+            echo "❌ FIPS Compliance: FAILED"
+            echo "Found $DENY_COUNT compliance violations"
+            exit 1
+          else
+            echo ""
+            echo "✅ FIPS Compliance: PASSED"
+          fi
+
+      - name: Generate Compliance Report
+        if: always()
+        run: |
+          opa eval --data policies/fips-compliance-cdx16.rego \
+            --input cbom/cbom.json \
+            --format pretty \
+            'data.fips_compliance_cdx16.compliance_report' \
+            > compliance-report.json
+
+          cat compliance-report.json
+
+      - name: Upload Compliance Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fips-compliance-report
+          path: compliance-report.json
+
+  # ============================================
+  # Stage 5: Generate CSV Report
+  # ============================================
+  generate_csv_report:
+    runs-on: ubuntu-latest
+    needs: rego_fips_compliance
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download CBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: cbom-cyclonedx-1.6
+          path: ./cbom
+
+      - name: Make CSV script executable
+        run: chmod +x qvs-cbom-csv.sh
+
+      - name: Generate CSV Report
+        run: |
+          ./qvs-cbom-csv.sh cbom/cbom.json --output cbom-report.csv
+
+      - name: Upload CSV Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbom-csv-report
+          path: cbom-report.csv
+
+  # ============================================
+  # Stage 6: Tag Image as Compliant (only if REGO passes)
+  # ============================================
+  tag_compliant_image:
+    runs-on: ubuntu-latest
+    needs: [rego_fips_compliance]
+    permissions:
+      packages: write
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag image as FIPS-compliant
+        run: |
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          COMPLIANT_TAG="${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:fips-compliant-${{ github.sha }}"
+
+          docker pull $IMAGE_TAG
+          docker tag $IMAGE_TAG $COMPLIANT_TAG
+          docker push $COMPLIANT_TAG
+
+          echo "✅ Image tagged as FIPS-compliant: $COMPLIANT_TAG"
+
+  # ============================================
+  # Stage 7: Deployment Simulation (Aqua Admission Controller would run here)
+  # ============================================
+  simulate_deployment:
+    runs-on: ubuntu-latest
+    needs: tag_compliant_image
+    steps:
+      - name: Simulate Kubernetes Deployment
+        run: |
+          echo "=== Simulating Kubernetes Deployment ==="
+          echo "In production, Aqua Admission Controller would:"
+          echo "  ✓ Check Kubernetes Assurance Policy (AVD rules)"
+          echo "  ✓ Verify required labels (fips.compliance, crypto.level)"
+          echo "  ✓ Block privileged containers"
+          echo "  ✓ Enforce namespace isolation"
+          echo ""
+          echo "Image: ${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:fips-compliant-${{ github.sha }}"
+          echo "Status: DEPLOYMENT ALLOWED"
+
+  # ============================================
+  # Stage 8: Publish Reports to GitHub Pages
+  # ============================================
+  publish_reports:
+    runs-on: ubuntu-latest
+    needs: [generate_cbom, rego_fips_compliance, generate_csv_report]
+    if: always()
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create report index page
+        run: |
+          mkdir -p ./reports
+          cp artifacts/cbom-cyclonedx-1.6/cbom.json ./reports/
+          cp artifacts/cbom-csv-report/cbom-report.csv ./reports/ || true
+          cp artifacts/fips-compliance-report/compliance-report.json ./reports/ || true
+
+          cat > ./reports/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>FIPS 140-3 CBOM Compliance Reports</title>
+            <style>
+              body {
+                font-family: 'Segoe UI', system-ui, sans-serif;
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 20px;
+                background: #f5f5f5;
+              }
+              h1 {
+                color: #2c3e50;
+                border-bottom: 3px solid #3498db;
+                padding-bottom: 10px;
+              }
+              .card {
+                background: white;
+                border-radius: 8px;
+                padding: 24px;
+                margin-bottom: 20px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+              }
+              .badge {
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 4px;
+                font-size: 0.85em;
+                font-weight: 600;
+                color: white;
+                margin-right: 8px;
+              }
+              .badge-fips { background: #27ae60; }
+              .badge-cbom { background: #3498db; }
+              .badge-quantum { background: #9b59b6; }
+              .link {
+                display: inline-block;
+                margin: 8px 8px 8px 0;
+                padding: 10px 20px;
+                background: #3498db;
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+                transition: background 0.3s;
+              }
+              .link:hover { background: #2980b9; }
+              .link-csv { background: #27ae60; }
+              .link-csv:hover { background: #229954; }
+              .link-json { background: #7f8c8d; }
+              .link-json:hover { background: #6c7a89; }
+            </style>
+          </head>
+          <body>
+            <h1>🔐 FIPS 140-3 CBOM Compliance Reports</h1>
+
+            <div class="card">
+              <h2>
+                <span class="badge badge-fips">FIPS 140-3</span>
+                <span class="badge badge-cbom">CycloneDX 1.6</span>
+                Cryptography Bill of Materials
+              </h2>
+              <p>Complete cryptographic inventory with NIST risk assessments and quantum vulnerability analysis.</p>
+              <a href="cbom.json" class="link link-json">📄 Download CBOM (JSON)</a>
+              <a href="cbom-report.csv" class="link link-csv">📊 Download Report (CSV)</a>
+            </div>
+
+            <div class="card">
+              <h2>
+                <span class="badge badge-fips">REGO Policy</span>
+                FIPS Compliance Evaluation
+              </h2>
+              <p>Policy-as-code evaluation results showing compliance status, violations, and warnings.</p>
+              <a href="compliance-report.json" class="link link-json">📋 View Compliance Report</a>
+            </div>
+
+            <div class="card">
+              <h2>
+                <span class="badge badge-quantum">Quantum Risk</span>
+                Post-Quantum Readiness
+              </h2>
+              <p>Analysis of quantum-vulnerable algorithms to support migration planning to post-quantum cryptography.</p>
+            </div>
+
+            <div class="card" style="background: #f8f9fa; border-left: 4px solid #3498db;">
+              <p><strong>Build Information</strong></p>
+              <p>Commit: <code>${{ github.sha }}</code></p>
+              <p>Branch: <code>${{ github.ref_name }}</code></p>
+              <p>Generated: <code>$(date -u +"%Y-%m-%d %H:%M:%S UTC")</code></p>
+            </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./reports
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "Deploy FIPS CBOM reports from ${{ github.sha }}"
