@@ -1,8 +1,8 @@
 #!/bin/sh
-# QVS-CBOM CSV Output Helper (self-contained)
+# Aqua-CBOM CSV Output Helper (self-contained)
 # Usage:
-#  - Convert existing JSON: ./qvs-cbom-csv.sh input.json --output report.csv
-#  - Scan a directory and convert: ./qvs-cbom-csv.sh /path/to/dir --output report.csv
+#  - Convert existing JSON: ./aqua-cbom-csv.sh input.json --output report.csv
+#  - Scan a directory and convert: ./aqua-cbom-csv.sh /path/to/dir --output report.csv
 set -eu
 
 TARGET="${1:-}"
@@ -62,9 +62,20 @@ fi
 
 # Case 2: input is a directory -> run scanner and convert
 if [ -d "$TARGET" ] || [ -f "$TARGET" ]; then
+    # Detect binary name (prefer aqua-cbom, fallback to qvs-cbom)
+    if [ -f "./aqua-cbom" ]; then
+        CBOM_BIN="./aqua-cbom"
+    elif [ -f "./qvs-cbom" ]; then
+        echo "⚠️  WARNING: qvs-cbom is deprecated, please rename to aqua-cbom" >&2
+        CBOM_BIN="./qvs-cbom"
+    else
+        echo "Error: aqua-cbom binary not found" >&2
+        exit 1
+    fi
+
     CBOM_TMP="$(mktemp -t cbom-XXXXXX.json)"
     set +e
-    CBOM_JSON="$(./qvs-cbom -mode file -dir "$TARGET" -output-cbom 2>/dev/null)"
+    CBOM_JSON="$($CBOM_BIN -mode file -dir "$TARGET" -output-cbom 2>/dev/null)"
     SCAN_EXIT=$?
     set -e
     if [ $SCAN_EXIT -ne 0 ] || [ -z "$CBOM_JSON" ]; then
