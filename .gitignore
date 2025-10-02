@@ -17,3 +17,4 @@ docs/
 
 # IDE
 .idea/
+.mcp.json
