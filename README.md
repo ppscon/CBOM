@@ -8,23 +8,23 @@ git clone https://github.com/ppscon/CBOM.git
 cd CBOM
 docker build -t enhanced-scanner .
 
-# Run an image scan and save CBOM JSON to a host directory
+# Basic CBOM scan (CycloneDX 1.6)
 mkdir -p ./outputs
-docker run --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v "$PWD/outputs":/out \
-  -e CBOM_OUTPUT_FILE=/out/juice-shop.json \
-  enhanced-scanner --CBOM image bkimminich/juice-shop:latest
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/outputs":/out -e CBOM_OUTPUT_FILE=/out/juice-shop.json -e CBOM_CDX_TARGET=1.6 enhanced-scanner --CBOM image bkimminich/juice-shop:latest
+
+# With PQC Migration Planning (NEW!)
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/outputs":/out -e CBOM_OUTPUT_FILE=/out/juice-shop-migration.json -e CBOM_CDX_TARGET=1.6 -e CBOM_GENERATE_MIGRATION_PLAN=true -e CBOM_MIGRATION_CONTEXT=edge_ingress -e CBOM_MIGRATION_TIMELINE=2025-Q2 enhanced-scanner --CBOM image bkimminich/juice-shop:latest
 
 # Convert JSON → CSV on the host
-./json-to-csv.sh ./outputs/juice-shop.json ./outputs/juice-shop.csv
+./aqua-cbom-csv.sh ./outputs/juice-shop.json --output ./outputs/juice-shop.csv
 ```
 
 What happens:
 1. The scanner performs its standard vulnerability scan on the image.
-2. A CycloneDX 1.4 CBOM of cryptographic assets is generated and saved to `CBOM_OUTPUT_FILE`.
+2. A CycloneDX 1.6 CBOM of cryptographic assets is generated and saved to `CBOM_OUTPUT_FILE`.
+3. (Optional) Post-Quantum Cryptography migration plan with context-aware guidance based on NIST FIPS 203/204/205.
 
-See `DEMO-GUIDE.md` for a guided walkthrough.
+See `docs/DEMO-GUIDE.md` for a guided walkthrough and `docs/MIGRATION-PLANNING.md` for migration planning details.
 
 ## Demo Script
 Run `./demo.sh juice` to scan the Juice Shop demo or `./demo.sh image nginx:latest` to scan another image. Use `./demo.sh --help` for options.
@@ -57,13 +57,16 @@ docker run --rm \
 ## Bare-Metal Usage (Optional)
 ```bash
 # Make binaries executable
-chmod +x aqua-cbom aqua-cbom-darwin json-to-csv.sh wrapper.sh
+chmod +x aqua-cbom aqua-cbom-darwin aqua-cbom-csv.sh wrapper.sh
 
-# File system (macOS)
+# Basic scan (macOS)
 ./aqua-cbom-darwin -mode file -dir /path/to/scan -output-cbom > cbom.json
 
-# CSV conversion helper (host)
-./json-to-csv.sh cbom.json cbom.csv
+# With PQC migration planning (macOS)
+./aqua-cbom-darwin -mode file -dir /path/to/scan -output-cbom -migration-plan -migration-context edge_ingress -migration-timeline 2025-Q2 > cbom.json
+
+# CSV conversion helper
+./aqua-cbom-csv.sh cbom.json --output cbom.csv
 ```
 
 ## Confidence Handling
