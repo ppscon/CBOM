@@ -12,6 +12,7 @@ COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=fetch-jq /tmp/jq /usr/local/bin/jq
 ADD aqua-cbom /aqua-cbom
 ADD wrapper.sh /wrapper.sh
+ADD migration-rules.yaml /migration-rules.yaml
 
 RUN chmod +x /usr/local/bin/docker /usr/local/bin/jq /aqua-cbom /wrapper.sh
 

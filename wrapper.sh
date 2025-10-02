@@ -46,9 +46,9 @@ else
     set --
 fi
 
-# Run the original scanner first.
+# Run the original scanner first (redirect to stderr to keep stdout clean for CBOM JSON).
 set +e
-"$ORIGINAL_ENTRYPOINT" "$@"
+"$ORIGINAL_ENTRYPOINT" "$@" >&2
 SCANNER_EXIT_CODE=$?
 set -e
 
@@ -60,7 +60,7 @@ run_cbom_command() {
 
     # Build command with migration planning flags if enabled
     CBOM_ARGS="$*"
-    if [ "${CBOM_GENERATE_MIGRATION_PLAN:-true}" = "true" ]; then
+    if [ "${CBOM_GENERATE_MIGRATION_PLAN:-false}" = "true" ]; then
         CBOM_ARGS="$CBOM_ARGS -migration-plan"
         if [ -n "${CBOM_MIGRATION_CONTEXT:-}" ]; then
             CBOM_ARGS="$CBOM_ARGS -migration-context ${CBOM_MIGRATION_CONTEXT}"
@@ -77,8 +77,7 @@ run_cbom_command() {
     tmp_json=$(mktemp -p /tmp cbom-fixed-XXXXXX)
 
     set +e
-    # shellcheck disable=SC2086
-    $CBOM_BINARY $CBOM_ARGS >"$tmp_raw"
+    eval "$CBOM_BINARY $CBOM_ARGS" >"$tmp_raw"
     CBOM_EXIT=$?
     set -e
 
