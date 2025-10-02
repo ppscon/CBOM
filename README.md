@@ -8,15 +8,18 @@ git clone https://github.com/ppscon/CBOM.git
 cd CBOM
 docker build -t enhanced-scanner .
 
-# Run with the Docker socket mounted so CBOM can export image filesystems
-docker run -v /var/run/docker.sock:/var/run/docker.sock \
-  enhanced-scanner --CBOM image bkimminich/juice-shop:latest
+# Basic CBOM scan (CycloneDX 1.6)
+docker run -v /var/run/docker.sock:/var/run/docker.sock -e CBOM_CDX_TARGET=1.6 enhanced-scanner --CBOM image bkimminich/juice-shop:latest
+
+# With PQC Migration Planning
+docker run -v /var/run/docker.sock:/var/run/docker.sock -e CBOM_CDX_TARGET=1.6 -e CBOM_GENERATE_MIGRATION_PLAN=true -e CBOM_MIGRATION_CONTEXT=edge_ingress -e CBOM_MIGRATION_TIMELINE=2025-Q2 enhanced-scanner --CBOM image bkimminich/juice-shop:latest
 ```
 
 What happens:
 1. Trivy performs its standard vulnerability scan
 2. The wrapper extracts the image filesystem
-3. Aqua-CBOM analyzes cryptographic assets and generates a CycloneDX 1.4 CBOM (1.6 via `CBOM_CDX_TARGET=1.6`)
+3. Aqua-CBOM analyzes cryptographic assets and generates a CycloneDX 1.6 CBOM
+4. (Optional) Post-Quantum Cryptography migration plan with context-aware guidance based on NIST FIPS 203/204/205
 
 See `DEMO-GUIDE.md` for a detailed walkthrough.
 
@@ -54,23 +57,27 @@ docker run -e CBOM_COMMAND_TEMPLATE='/qvs-cbom -mode file -dir /workspace -outpu
 
 ## Bare-Metal Usage (Optional)
 ```bash
-# Linux
-./qvs-cbom -mode file -dir /path/to/scan -output-cbom
+# Linux - basic scan
+./aqua-cbom -mode file -dir /path/to/scan -output-cbom
 
-# macOS
-./qvs-cbom-darwin -mode file -dir /path/to/scan -output-cbom
+# macOS - basic scan
+./aqua-cbom-darwin -mode file -dir /path/to/scan -output-cbom
+
+# macOS - with PQC migration planning
+./aqua-cbom-darwin -mode file -dir /path/to/scan -output-cbom -migration-plan -migration-context edge_ingress -migration-timeline 2025-Q2
 
 # Kubernetes
-./qvs-cbom -mode k8s -namespace default -output-cbom
+./aqua-cbom -mode k8s -namespace default -output-cbom
 
 # CSV report generation
-./qvs-cbom-csv.sh input.json --output report.csv
+./aqua-cbom-csv.sh input.json --output report.csv
 ```
 
 ## Features
 
 - **CycloneDX 1.4/1.6 Compliance**: Standards-compliant CBOM generation
 - **Quantum Vulnerability Detection**: Identifies quantum-vulnerable cryptographic algorithms
+- **PQC Migration Planning**: Context-aware guidance for migrating to NIST FIPS 203/204/205 algorithms
 - **FIPS 140-3 Alignment**: Supports FIPS compliance validation workflows
 - **Zero Workflow Disruption**: Integrates with existing container security pipelines
 - **Multi-format Output**: JSON CBOM + CSV reporting
