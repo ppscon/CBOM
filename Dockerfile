@@ -10,9 +10,10 @@ FROM ${BASE_IMAGE}
 
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=fetch-jq /tmp/jq /usr/local/bin/jq
-ADD qvs-cbom /qvs-cbom
+ADD aqua-cbom /aqua-cbom
 ADD wrapper.sh /wrapper.sh
+ADD migration-rules.yaml /migration-rules.yaml
 
-RUN chmod +x /usr/local/bin/docker /usr/local/bin/jq /qvs-cbom /wrapper.sh
+RUN chmod +x /usr/local/bin/docker /usr/local/bin/jq /aqua-cbom /wrapper.sh
 
 ENTRYPOINT ["/wrapper.sh"]
