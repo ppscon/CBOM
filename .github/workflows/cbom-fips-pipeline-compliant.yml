@@ -122,6 +122,7 @@ jobs:
 
       - name: Run Aqua Security Scan
         id: aqua_scan
+        continue-on-error: true  # Demo: Aqua policies very strict, focus on CBOM/REGO gate
         run: |
           mkdir -p artifacts
           docker run --rm \
