@@ -113,6 +113,157 @@ This pipeline implements a **defense-in-depth** approach with two complementary 
 
 ---
 
+## Remediation Guidance Based on CBOM Findings
+
+When the REGO policy detects violations, developers need clear guidance on how to fix them. Here's what to do for each violation type:
+
+### Violation 1: MD5 Detected (Deprecated Algorithm)
+
+**Found in:**
+- `/tmp/cbom-image-*/juice-shop/Gruntfile.js`
+- `/tmp/cbom-image-*/juice-shop/lib/insecurity.ts`
+
+**Issue:** MD5 is cryptographically broken and not FIPS 140-3 approved
+
+**Remediation:**
+```javascript
+// ❌ BAD - MD5 usage
+const crypto = require('crypto');
+const hash = crypto.createHash('md5').update(data).digest('hex');
+
+// ✅ GOOD - SHA-256 (FIPS approved)
+const crypto = require('crypto');
+const hash = crypto.createHash('sha256').update(data).digest('hex');
+
+// ✅ BETTER - SHA-3 (quantum-resistant)
+const crypto = require('crypto');
+const hash = crypto.createHash('sha3-256').update(data).digest('hex');
+```
+
+**FIPS 140-3 Approved Alternatives:**
+- **SHA-256** (FIPS 180-4) - General purpose
+- **SHA-384** (FIPS 180-4) - Higher security
+- **SHA-512** (FIPS 180-4) - Maximum security
+- **SHA3-256** (FIPS 202) - Quantum-resistant
+
+---
+
+### Violation 2: Quantum-Vulnerable Cryptography
+
+**Found:** 627 out of 628 assets use quantum-vulnerable algorithms
+
+**Issue:** Current algorithms secure against classical computers but vulnerable to quantum computers (Grover's Algorithm, Shor's Algorithm)
+
+**Timeline:** NIST recommends migration by 2030-2035
+
+**Remediation Strategy:**
+
+#### Phase 1: Identify (CBOM does this)
+```bash
+# CBOM already identified:
+- RSA-2048/RSA-4096 (Shor's Algorithm vulnerable)
+- ECDSA P-256/P-384 (Shor's Algorithm vulnerable)
+- AES-128/AES-256 (Grover's Algorithm - doubles key search)
+```
+
+#### Phase 2: Plan Migration
+```
+Current → NIST PQC Standards
+---
+RSA/ECDSA → ML-KEM (FIPS 203) - Key Encapsulation
+RSA/ECDSA → ML-DSA (FIPS 204) - Digital Signatures
+            SLH-DSA (FIPS 205) - Stateless Signatures
+AES-128   → AES-256 (double key size for Grover resistance)
+```
+
+#### Phase 3: Implement Hybrid Approach
+```javascript
+// Hybrid cryptography (classical + post-quantum)
+// Protects against both current and future threats
+
+// ✅ RECOMMENDED: Hybrid key exchange
+const hybridKex = {
+  classical: 'ECDH-P384',      // Secure now
+  postQuantum: 'ML-KEM-768',   // Secure post-quantum
+  mode: 'concatenate'          // Combine both
+};
+```
+
+---
+
+### Violation 3: Deprecated Symmetric Algorithms
+
+**If CBOM detects:** 3DES, DES, RC4, RC2
+
+**Remediation:**
+```python
+# ❌ BAD - 3DES (deprecated 2023)
+from Crypto.Cipher import DES3
+cipher = DES3.new(key, DES3.MODE_CBC)
+
+# ✅ GOOD - AES-256-GCM (FIPS approved)
+from Cryptography.hazmat.primitives.ciphers.aead import AESGCM
+cipher = AESGCM(key)  # key must be 256 bits
+```
+
+**FIPS 140-3 Approved Symmetric Algorithms:**
+- **AES-128** (FIPS 197) - Minimum
+- **AES-192** (FIPS 197) - Better
+- **AES-256** (FIPS 197) - Best (quantum-resistant with larger key)
+
+---
+
+### Violation 4: Weak Key Sizes
+
+**If CBOM detects:** RSA-1024, ECDSA P-192
+
+**Remediation:**
+```python
+# ❌ BAD - RSA-1024 (broken)
+from cryptography.hazmat.primitives.asymmetric import rsa
+private_key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+
+# ✅ GOOD - RSA-3072 (FIPS minimum for new keys)
+private_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
+
+# ✅ BETTER - RSA-4096 (higher security margin)
+private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+
+# ✅ BEST - Prepare for PQC migration
+# Use ML-DSA-65 (FIPS 204) when available in your crypto library
+```
+
+**FIPS 140-3 Minimum Key Sizes:**
+- **RSA:** 2048 bits (3072+ recommended for new deployments)
+- **ECDSA:** P-256 minimum (P-384 recommended)
+- **AES:** 128 bits minimum (256 recommended for quantum resistance)
+
+---
+
+## Re-running Pipeline After Remediation
+
+After fixing violations:
+
+```bash
+# 1. Update code with FIPS-approved algorithms
+git add .
+git commit -m "fix: replace MD5 with SHA-256 for FIPS 140-3 compliance"
+
+# 2. Push to trigger pipeline
+git push
+
+# 3. Watch for clean REGO evaluation
+./demo-run-pipelines.sh list
+```
+
+**Expected result after remediation:**
+```
+✅ FIPS 140-3 COMPLIANCE PASSED: No cryptographic policy violations
+✅ Image pushed to registry
+```
+
+---
+
 ## Demo Scenario: Cryptographic Violations Detection
 
 **Command:**
