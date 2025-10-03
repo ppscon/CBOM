@@ -229,6 +229,9 @@ jobs:
             -e CBOM_MIGRATION_TIMELINE=2025-Q2 \
             enhanced-scanner --CBOM image ${{ env.IMAGE_TAG }}
 
+          # Fix permissions on generated files
+          sudo chown -R $(id -u):$(id -g) outputs/
+
       - name: Generate CBOM CSV report
         run: |
           if [ -f outputs/cbom.json ]; then
