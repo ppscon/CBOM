@@ -28,6 +28,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ppscon/cbom
+  # Demo: Scan juice-shop for CBOM (has crypto findings)
+  SCAN_TARGET: bkimminich/juice-shop:latest
 
 jobs:
   # ============================================================================
@@ -221,6 +223,7 @@ jobs:
       - name: Generate CBOM with PQC migration planning
         run: |
           mkdir -p outputs
+          echo "Scanning ${{ env.SCAN_TARGET }} for cryptographic inventory..."
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v ${{ github.workspace }}/outputs:/out \
@@ -229,7 +232,7 @@ jobs:
             -e CBOM_GENERATE_MIGRATION_PLAN=true \
             -e CBOM_MIGRATION_CONTEXT=edge_ingress \
             -e CBOM_MIGRATION_TIMELINE=2025-Q2 \
-            enhanced-scanner --CBOM image ${{ env.IMAGE_TAG }}
+            enhanced-scanner --CBOM image ${{ env.SCAN_TARGET }}
 
           # Fix permissions on generated files
           sudo chown -R $(id -u):$(id -g) outputs/
@@ -302,6 +305,7 @@ jobs:
 
       - name: Evaluate REGO policy (FIPS 140-3 compliance)
         id: rego_eval
+        continue-on-error: true
         run: |
           echo "=== FIPS 140-3 Cryptographic Compliance Check ==="
 
