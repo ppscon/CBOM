@@ -95,7 +95,7 @@ jobs:
 
     env:
       DOCKER_AUTH_CONFIG: ${{ secrets.DOCKER_AUTH_CONFIG }}
-      IMAGE_TAG: ghcr.io/${{ github.repository }}:${{ github.sha }}
+      IMAGE_TAG: ghcr.io/ppscon/cbom:${{ github.sha }}
 
     steps:
       - name: Checkout repository
@@ -195,7 +195,7 @@ jobs:
       packages: read
 
     env:
-      IMAGE_TAG: ghcr.io/${{ github.repository }}:${{ github.sha }}
+      IMAGE_TAG: ghcr.io/ppscon/cbom:${{ github.sha }}
 
     steps:
       - name: Checkout repository
