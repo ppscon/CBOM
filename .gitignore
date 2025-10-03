@@ -37,7 +37,8 @@ main.tf
 setenv.sh
 
 # Policies and workflows (internal only)
-policies/
+policies/*.tf
+policies/variables.tf
 workflows/
 
 # Kubernetes manifests (internal testing)
