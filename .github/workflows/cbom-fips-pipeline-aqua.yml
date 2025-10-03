@@ -202,9 +202,11 @@ jobs:
       - name: Build aqua-cbom binary for Linux
         run: |
           cd scanner
-          env GOOS=linux GOARCH=amd64 go build -o ../aqua-cbom .
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ../aqua-cbom .
           cd ..
           chmod +x aqua-cbom
+          ls -lh aqua-cbom
+          file aqua-cbom
 
       - name: Build enhanced scanner (Trivy wrapper for now)
         run: docker build -t enhanced-scanner .
