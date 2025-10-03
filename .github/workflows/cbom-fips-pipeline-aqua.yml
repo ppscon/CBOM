@@ -347,7 +347,7 @@ jobs:
           echo "=== Post-Quantum Cryptography (PQC) Readiness Check ==="
 
           WARN_OUTPUT=$(opa eval \
-            --data policies/fips_compliance_cdx16.rego \
+            --data policies/fips-compliance-cdx16.rego \
             --input outputs/cbom.json \
             --format pretty \
             'data.fips_compliance_cdx16.warn')
