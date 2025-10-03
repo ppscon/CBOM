@@ -30,9 +30,30 @@ chmod +x demo-run-pipelines.sh
    - Shows: "🛑 Image will NOT be pushed to registry"
 4. **Push Image** - Skipped due to REGO failure
 
-### Demo Talking Points (Reference Screenshot):
+### Demo Talking Points (Reference Screenshots):
 
-**"Let me walk you through what the REGO policy detected in the Juice Shop image..."**
+#### Stage 2: Aqua Image Assurance Scan
+
+**"First, let's look at what Aqua Security found..."**
+
+**Aqua Scan Results:**
+- **Disallowed: true** - Image failed Aqua's FIPS Image Assurance policy
+- **Policy: fips-140-3-image-compliance**
+- Aqua detected vulnerabilities and policy violations
+- "This is our first layer of defense - traditional CVE and policy scanning"
+- "Notice it caught issues, but we continue for demo purposes (`continue-on-error: true`)"
+- "In production, this would also be a blocking gate"
+
+**Why continue?**
+- "FIPS 140-3 requires CVSS score < 5 (very strict)"
+- "We want to demonstrate the SECOND layer: cryptographic compliance via CBOM/REGO"
+- "This is where we detect specific algorithmic violations - not just CVEs"
+
+---
+
+#### Stage 4: REGO Cryptographic Compliance Check
+
+**"Now let's see what the REGO policy detected in the CBOM..."**
 
 **Lines 42-52: REGO Evaluation Results**
 - "The policy evaluated the CBOM and found **6 critical violations**"
@@ -53,6 +74,42 @@ chmod +x demo-run-pipelines.sh
 - "In production, we'd remove `continue-on-error` and this would be a **hard stop**"
 - "For this demo, we override to show all pipeline stages and capabilities"
 - "The security gate is working - it detected deprecated MD5 and quantum-vulnerable algorithms"
+
+---
+
+## Defense-in-Depth: Two-Layer Security Model
+
+This pipeline implements a **defense-in-depth** approach with two complementary security gates:
+
+### Layer 1: Aqua Image Assurance (Traditional Security)
+- ✅ CVE vulnerability scanning
+- ✅ Malware detection
+- ✅ CIS benchmarks
+- ✅ Package compliance
+- ✅ Maximum CVSS score < 5 (FIPS requirement)
+- **Focus:** Known vulnerabilities and configuration issues
+
+### Layer 2: CBOM + REGO (Cryptographic Compliance)
+- ✅ Cryptographic Bill of Materials (CBOM) generation
+- ✅ Algorithm detection (MD5, SHA-1, AES, RSA, etc.)
+- ✅ Deprecated algorithm blocking (MD5, 3DES, RC4)
+- ✅ Quantum vulnerability assessment
+- ✅ FIPS 140-3 algorithmic compliance
+- **Focus:** Cryptographic weaknesses and future threats
+
+### Why Both?
+
+**Aqua alone** catches traditional security issues but may miss:
+- Use of deprecated cryptographic algorithms
+- Quantum-vulnerable encryption
+- Non-FIPS approved crypto implementations
+
+**CBOM/REGO** catches cryptographic-specific issues:
+- MD5 usage (even if no CVE)
+- Quantum-vulnerable algorithms (secure today, vulnerable post-quantum)
+- FIPS 140-3 algorithm compliance
+
+**Together:** Complete coverage of both traditional security AND cryptographic compliance.
 
 ---
 
