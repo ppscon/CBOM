@@ -44,15 +44,23 @@ print_info() {
 }
 
 run_compliant_pipeline() {
-    print_header "🟢 DEMO 1: COMPLIANT IMAGE (All Gates Pass)"
+    print_header "🟢 DEMO: COMPLIANT IMAGE (Not recommended - see violations demo)"
 
-    echo "This pipeline demonstrates:"
-    echo "  • Minimal Alpine image with NO cryptographic libraries"
-    echo "  • ✅ Aqua scan PASSES (minimal vulnerabilities)"
-    echo "  • ✅ CBOM generation PASSES (no crypto found)"
-    echo "  • ✅ REGO evaluation PASSES (no violations)"
-    echo "  • ✅ Image is PUSHED to registry"
+    echo "⚠️  NOTE: Even minimal Alpine images may fail strict FIPS policies"
     echo ""
+    echo "RECOMMENDED: Use 'violations' demo instead to show:"
+    echo "  • Cryptographic violations detection (MD5, deprecated algorithms)"
+    echo "  • REGO policy evaluation and blocking"
+    echo "  • Clear security gate messaging"
+    echo ""
+
+    read -p "Continue with compliant demo anyway? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo ""
+        print_info "Run './demo-run-pipelines.sh violations' for the recommended demo"
+        exit 0
+    fi
 
     print_info "Triggering compliant pipeline..."
     RUN_ID=$(gh workflow run "$COMPLIANT_WORKFLOW" --ref master --json 2>&1)
@@ -77,14 +85,24 @@ run_compliant_pipeline() {
 }
 
 run_violations_pipeline() {
-    print_header "🔴 DEMO 2: VULNERABLE IMAGE (Crypto Violations Block Push)"
+    print_header "🔴 FIPS 140-3 CRYPTOGRAPHIC VIOLATIONS DEMO"
 
-    echo "This pipeline demonstrates:"
-    echo "  • Juice Shop image with deprecated cryptography"
-    echo "  • ⚠️  Aqua scan FAILS (continue for demo)"
-    echo "  • ✅ CBOM generation SUCCEEDS (finds MD5, SHA-3)"
-    echo "  • ❌ REGO evaluation FAILS (deprecated algorithms detected)"
-    echo "  • 🛑 Image push is BLOCKED"
+    echo "This pipeline demonstrates COMPLETE FIPS 140-3 compliance workflow:"
+    echo ""
+    echo "What you'll see:"
+    echo "  1. 🏗️  Build juice-shop image"
+    echo "  2. 🔍 Aqua Image Assurance scan (may fail - FIPS score < 5)"
+    echo "  3. 📊 CBOM generation - detects cryptographic inventory"
+    echo "  4. ⚖️  REGO policy evaluation - **6 VIOLATIONS DETECTED**:"
+    echo "      • 627/628 assets quantum-vulnerable"
+    echo "      • MD5 detected (deprecated, not FIPS approved)"
+    echo "      • Quantum-vulnerable algorithms (Grover's Algorithm)"
+    echo "  5. 🛑 PIPELINE BLOCKED - Image NOT pushed"
+    echo ""
+    echo "Key talking points:"
+    echo "  • Lines 60-62: Clear 'PIPELINE BLOCKED' messaging"
+    echo "  • Security gate working as designed"
+    echo "  • In production: remove 'continue-on-error' for hard stop"
     echo ""
 
     print_info "Triggering violations pipeline (via git push)..."

@@ -16,30 +16,47 @@ chmod +x demo-run-pipelines.sh
 ./demo-run-pipelines.sh both
 ```
 
-## Demo Scenarios
+## Important: Demo Mode with `continue-on-error`
 
-### Scenario 1: Compliant Image ✅ (PASS)
+**This pipeline uses `continue-on-error: true` to demonstrate ALL pipeline stages.**
 
-**Command:**
-```bash
-./demo-run-pipelines.sh compliant
-```
+### What You'll See:
 
-**What happens:**
-1. Builds minimal Alpine image (Dockerfile.compliant)
-2. Aqua scan: **PASSES** (minimal vulnerabilities)
-3. CBOM generation: **PASSES** (no crypto libraries found)
-4. REGO evaluation: **PASSES** (no violations)
-5. Image push: **SUCCESS** ✅
+1. **Aqua Scan** - May fail (FIPS 140-3 score < 5 is very strict)
+2. **CBOM Generation** - Succeeds (detects cryptographic algorithms)
+3. **REGO Evaluation** - **FAILS with violations** 🛑
+   - Shows: "❌ FIPS 140-3 COMPLIANCE FAILED: 6 violation(s) detected"
+   - Shows: "🛑 PIPELINE BLOCKED - Image does NOT meet FIPS 140-3 cryptographic requirements"
+   - Shows: "🛑 Image will NOT be pushed to registry"
+4. **Push Image** - Skipped due to REGO failure
 
-**Demonstrates:**
-- Clean FIPS-compliant image
-- All security gates pass
-- Image successfully pushed to registry
+### Demo Talking Points (Reference Screenshot):
+
+**"Let me walk you through what the REGO policy detected in the Juice Shop image..."**
+
+**Lines 42-52: REGO Evaluation Results**
+- "The policy evaluated the CBOM and found **6 critical violations**"
+- "Line 43: CBOM shows **627 out of 628 assets are quantum-vulnerable**"
+- "Lines 44-45: **MD5 detected** in Gruntfile.js and lib/insecurity.ts - NOT FIPS 140-3 approved"
+- "Lines 46-48: Quantum-vulnerable cryptography detected:"
+  - MD5 in Gruntfile.js (Grover's Algorithm + Broken)
+  - SHA-3 in frontend/989.js (Grover's Algorithm)
+  - MD5 in lib/insecurity.ts (Grover's Algorithm + Broken)
+
+**Lines 53-67: Security Gate Response**
+- "Line 60: ❌ **FIPS 140-3 COMPLIANCE FAILED: 6 violation(s) detected**"
+- "Line 61: 🛑 **PIPELINE BLOCKED** - Image does NOT meet FIPS 140-3 requirements"
+- "Line 62: 🛑 **Image will NOT be pushed to registry**"
+- "Lines 65-67: Action required - remediate violations before re-deployment"
+
+**Production vs Demo:**
+- "In production, we'd remove `continue-on-error` and this would be a **hard stop**"
+- "For this demo, we override to show all pipeline stages and capabilities"
+- "The security gate is working - it detected deprecated MD5 and quantum-vulnerable algorithms"
 
 ---
 
-### Scenario 2: Vulnerable Image ❌ (BLOCKED)
+## Demo Scenario: Cryptographic Violations Detection
 
 **Command:**
 ```bash
