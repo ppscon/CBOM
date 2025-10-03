@@ -70,7 +70,7 @@ get_components() = components if {
     # Direct CycloneDX format: input.components
     input.components
     components := input.components
-} else = [] {
+} else = [] if {
     # No components found
     true
 }
