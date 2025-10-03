@@ -1,19 +1,22 @@
 # FIPS 140-3 CBOM Demo Execution Guide
 
-## Quick Start
+## Quick Start - One Simple Command
 
 ```bash
-# Make script executable (first time only)
-chmod +x demo-run-pipelines.sh
+# Run the demo (triggers pipeline via GitHub Actions)
+./run-demo.sh run
+```
 
-# Run compliant pipeline (PASS scenario)
-./demo-run-pipelines.sh compliant
+**That's it!** No git commits, no code changes - just trigger and watch.
 
-# Run violations pipeline (FAIL scenario)
-./demo-run-pipelines.sh violations
+### Other Commands
 
-# Run both pipelines
-./demo-run-pipelines.sh both
+```bash
+./run-demo.sh run        # Trigger pipeline and watch (recommended)
+./run-demo.sh pipeline   # Same as 'run' (alias)
+./run-demo.sh trigger    # Trigger only (don't watch)
+./run-demo.sh watch      # Watch latest run
+./run-demo.sh list       # List recent runs
 ```
 
 ## Important: Demo Mode with `continue-on-error`
@@ -264,44 +267,52 @@ git push
 
 ---
 
-## Demo Scenario: Cryptographic Violations Detection
+## Running the Demo
 
-**Command:**
+### Single Command Execution
+
 ```bash
-./demo-run-pipelines.sh violations
+./run-demo.sh run
 ```
 
 **What happens:**
-1. Scans juice-shop image
-2. Aqua scan: **FAILS** (continues for demo)
-3. CBOM generation: **SUCCEEDS** (finds MD5, SHA-3)
-4. REGO evaluation: **FAILS** (6 violations detected)
-   - MD5 (deprecated algorithm)
-   - 627/628 assets quantum-vulnerable
-5. Image push: **BLOCKED** 🛑
+1. **Triggers pipeline** via GitHub Actions API (no git commit needed!)
+2. Pipeline scans **OWASP Juice Shop** image
+3. Executes all 6 stages:
+   - 🏗️  Build image
+   - 🔍 Aqua Security scan (may fail - strict FIPS policies)
+   - 📊 CBOM generation (succeeds - detects algorithms)
+   - ⚖️  REGO evaluation (fails - 6 violations detected)
+   - 🏷️  Tag image (skipped - REGO failed)
+   - 🚀 Push image (skipped - REGO failed)
+4. **Result:** Pipeline shows "🛑 PIPELINE BLOCKED"
+
+### REGO Violations Detected
+
+The REGO policy will find these specific issues:
+- ❌ **MD5 detected** in Gruntfile.js (deprecated, not FIPS 140-3 approved)
+- ❌ **MD5 detected** in lib/insecurity.ts (deprecated, not FIPS 140-3 approved)
+- ❌ **Quantum-vulnerable** SHA-3 in frontend/989.js (Grover's Algorithm)
+- ❌ **627 out of 628 assets** are quantum-vulnerable
+- ❌ Summary: **6 critical violations**
 
 **Demonstrates:**
-- Cryptographic compliance gate working
-- REGO policy detecting violations
-- Security gate prevents deployment
+- ✅ Cryptographic compliance gate working as designed
+- ✅ REGO policy detecting specific algorithmic violations
+- ✅ Security gate prevents deployment with clear messaging
+- ✅ No git commits needed for demo execution
 
 ---
 
-## Manual Trigger (GitHub UI)
+## Alternative: Manual Trigger (GitHub UI)
 
-### Compliant Pipeline:
+If you prefer to trigger via the GitHub web interface:
+
 1. Go to: https://github.com/ppscon/CBOM/actions
-2. Select "CBOM FIPS 140-3 Compliant Pipeline (PASS Demo)"
+2. Select "CBOM FIPS 140-3 Compliance Pipeline (Aqua Scanner)"
 3. Click "Run workflow"
 4. Select branch: `master`
 5. Click "Run workflow"
-
-### Violations Pipeline:
-Automatically triggers on push to master:
-```bash
-git commit --allow-empty -m "demo: trigger violations pipeline"
-git push
-```
 
 ---
 
@@ -309,13 +320,13 @@ git push
 
 ```bash
 # List recent runs
-./demo-run-pipelines.sh list
+./run-demo.sh list
 
-# Watch specific run
-./demo-run-pipelines.sh watch <run-id>
+# Watch latest run
+./run-demo.sh watch
 
 # Or use gh CLI directly
-gh run watch --exit-status
+gh run watch <run-id>
 ```
 
 ---
