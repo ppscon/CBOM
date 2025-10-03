@@ -4,6 +4,17 @@ import future.keywords.in
 import future.keywords.if
 
 # ==================================
+# Metadata
+# ==================================
+
+__rego_metadata__ := {
+    "id": "FIPS-CBOM-001",
+    "title": "FIPS 140-3 CBOM Compliance",
+    "severity": "CRITICAL",
+    "type": "Cryptographic Bill of Materials"
+}
+
+# ==================================
 # CycloneDX Format Helpers
 # ==================================
 

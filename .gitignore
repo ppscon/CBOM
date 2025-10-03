@@ -39,7 +39,7 @@ setenv.sh
 # Policies and workflows (internal only)
 policies/*.tf
 policies/variables.tf
-workflows/
+# Note: .github/workflows/ is NOT ignored - those are pipeline definitions
 
 # Kubernetes manifests (internal testing)
 k8s-demo-workloads*.yaml

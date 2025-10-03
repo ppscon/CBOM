@@ -301,7 +301,7 @@ jobs:
       - name: Validate REGO policy syntax
         run: |
           ls -la policies/
-          opa fmt --fail policies/fips-compliance-cdx16.rego
+          opa check policies/fips-compliance-cdx16.rego
 
       - name: Evaluate REGO policy (FIPS 140-3 compliance)
         id: rego_eval
