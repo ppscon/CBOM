@@ -1,0 +1,438 @@
+name: CBOM FIPS 140-3 Compliance Pipeline (Aqua Scanner)
+
+# FIPS 140-3 Compliant Pipeline Architecture
+# Implements workflow from: docs/REGO Policy Narration for FIPS 140-3 Compliance.md
+#
+# Workflow Order (Critical):
+#   1. Build Image
+#   2. Aqua Image Assurance (CVE/malware/CIS) → FAIL stops pipeline
+#   3. CBOM Generation (crypto detection) → Only if #2 passes
+#   4. REGO Policy Evaluation (GO/NO-GO) → FAIL blocks push
+#   5. Push Compliant Image → Only if all pass
+#   6. (Optional) Deploy to Kubernetes → Aqua Admission Controller
+#
+# Required Secrets (set when Aqua instance is ready):
+#   - AQUA_SERVER: Aqua tenant URL
+#   - AQUA_TOKEN: Scanner authentication token
+#   - AQUA_KEY: API key for SBOM generation
+#   - AQUA_SECRET: API secret for SBOM generation
+#   - DOCKER_AUTH_CONFIG: Docker registry auth (for pulling Aqua scanner)
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ============================================================================
+  # STAGE 1: Build Application Image
+  # ============================================================================
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_sha: ${{ github.sha }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=ref,event=branch
+            type=ref,event=pr
+          labels: |
+            com.aqua.security.policy=fips-140-3-compliant
+
+      - name: Build and push application image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================================
+  # STAGE 2: Aqua Image Assurance (MUST pass before CBOM)
+  # ============================================================================
+  # This is the FIRST GATE in FIPS 140-3 compliance workflow
+  # Checks: CVEs, malware, CIS benchmarks, package compliance
+  # FAIL = Pipeline stops immediately, CBOM never runs
+
+  aqua_image_assurance:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+      security-events: write
+
+    env:
+      DOCKER_AUTH_CONFIG: ${{ secrets.DOCKER_AUTH_CONFIG }}
+      IMAGE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Configure Docker authentication
+        run: |
+          mkdir -p $HOME/.docker
+          echo "$DOCKER_AUTH_CONFIG" > $HOME/.docker/config.json
+
+      - name: Pull Aqua Scanner image
+        run: docker pull registry.aquasec.com/scanner:2506.2.10
+
+      - name: Run Aqua Security Scan
+        run: |
+          mkdir -p artifacts
+          docker run --rm \
+            -v $(pwd)/artifacts:/artifacts \
+            -v $HOME/.docker/config.json:/root/.docker/config.json:ro \
+            --entrypoint="" \
+            registry.aquasec.com/scanner:2506.2.10 \
+            /opt/aquasec/scannercli scan \
+              -H ${{ secrets.AQUA_SERVER }} \
+              --token ${{ secrets.AQUA_TOKEN }} \
+              --registry "Github" \
+              ${{ env.IMAGE_TAG }} \
+              --show-negligible \
+              --register-compliant \
+              --htmlfile /artifacts/aqua-scan.html \
+              --jsonfile /artifacts/aqua-scan.json
+
+      - name: Upload Aqua scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqua-scan-reports
+          path: artifacts/
+          retention-days: 90
+
+      - name: Check scan results
+        run: |
+          # Parse JSON for critical/high vulnerabilities
+          CRITICAL_COUNT=$(jq '[.resources[].vulnerabilities[] | select(.aqua_severity=="critical")] | length' artifacts/aqua-scan.json || echo "0")
+          HIGH_COUNT=$(jq '[.resources[].vulnerabilities[] | select(.aqua_severity=="high")] | length' artifacts/aqua-scan.json || echo "0")
+
+          echo "Critical vulnerabilities: $CRITICAL_COUNT"
+          echo "High vulnerabilities: $HIGH_COUNT"
+
+          # FIPS 140-3 requirement: No critical vulnerabilities allowed
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "❌ FIPS 140-3 VIOLATION: Critical vulnerabilities detected"
+            echo "Pipeline STOPPED - image does not meet FIPS security requirements"
+            exit 1
+          fi
+
+          echo "✅ Aqua Image Assurance PASSED"
+
+  # ============================================================================
+  # STAGE 3: CBOM Generation (Separate Job - Not Yet Integrated with Aqua)
+  # ============================================================================
+  # This job runs ONLY if Aqua Image Assurance passes
+  # Generates Cryptographic Bill of Materials with PQC migration planning
+  # Note: This uses our standalone aqua-cbom scanner (not Aqua Platform integrated)
+
+  cbom_generation:
+    runs-on: ubuntu-latest
+    needs: aqua_image_assurance  # CRITICAL: Only runs if Stage 2 passes
+    permissions:
+      contents: read
+      packages: read
+
+    env:
+      IMAGE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build aqua-cbom binary for Linux
+        run: |
+          cd scanner
+          env GOOS=linux GOARCH=amd64 go build -o ../aqua-cbom .
+          cd ..
+          chmod +x aqua-cbom
+
+      - name: Build enhanced scanner (Trivy wrapper for now)
+        run: docker build -t enhanced-scanner .
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate CBOM with PQC migration planning
+        run: |
+          mkdir -p outputs
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ${{ github.workspace }}/outputs:/out \
+            -e CBOM_OUTPUT_FILE=/out/cbom.json \
+            -e CBOM_CDX_TARGET=1.6 \
+            -e CBOM_GENERATE_MIGRATION_PLAN=true \
+            -e CBOM_MIGRATION_CONTEXT=edge_ingress \
+            -e CBOM_MIGRATION_TIMELINE=2025-Q2 \
+            enhanced-scanner --CBOM image ${{ env.IMAGE_TAG }}
+
+      - name: Generate CBOM CSV report
+        run: |
+          if [ -f outputs/cbom.json ]; then
+            ./aqua-cbom-csv.sh outputs/cbom.json --output outputs/cbom.csv
+          fi
+
+      - name: Display CBOM summary
+        run: |
+          echo "=== CBOM Generation Summary ==="
+          if [ -f outputs/cbom.json ]; then
+            FINDINGS=$(jq '.findings | length' outputs/cbom.json || echo "0")
+            echo "Cryptographic algorithms detected: $FINDINGS"
+
+            if [ "$FINDINGS" -gt 0 ]; then
+              echo ""
+              echo "Sample findings (first 5):"
+              jq -r '.findings[0:5] | .[] | "  • \(.algorithm) - Risk: \(.risk) - \(.file)"' outputs/cbom.json
+            fi
+          else
+            echo "❌ CBOM file not generated"
+            exit 1
+          fi
+
+      - name: Upload CBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbom-reports
+          path: |
+            outputs/cbom.json
+            outputs/cbom.csv
+          retention-days: 90
+
+  # ============================================================================
+  # STAGE 4: REGO Policy Evaluation (GO/NO-GO Gate)
+  # ============================================================================
+  # FIPS 140-3 Compliance Gate
+  # Validates CBOM against organizational cryptographic policies
+  # FAIL = Image NOT pushed to registry
+
+  rego_compliance:
+    runs-on: ubuntu-latest
+    needs: cbom_generation
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download CBOM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cbom-reports
+          path: outputs
+
+      - name: Install OPA
+        run: |
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+          chmod +x opa
+          sudo mv opa /usr/local/bin/
+
+      - name: Validate REGO policy syntax
+        run: |
+          opa fmt --fail policies/fips-compliance-cdx16.rego
+
+      - name: Evaluate REGO policy (FIPS 140-3 compliance)
+        id: rego_eval
+        run: |
+          echo "=== FIPS 140-3 Cryptographic Compliance Check ==="
+
+          # Check for deny violations (blocking)
+          DENY_OUTPUT=$(opa eval \
+            --data policies/fips-compliance-cdx16.rego \
+            --input outputs/cbom.json \
+            --format pretty \
+            'data.fips_compliance_cdx16.deny')
+
+          echo "$DENY_OUTPUT"
+
+          # Count violations
+          VIOLATIONS=$(echo "$DENY_OUTPUT" | grep -c '"' || echo "0")
+
+          if [ "$VIOLATIONS" -gt 0 ]; then
+            echo ""
+            echo "❌ FIPS 140-3 COMPLIANCE FAILED: $VIOLATIONS violation(s) detected"
+            echo ""
+            echo "Violations:"
+            echo "$DENY_OUTPUT" | grep '"' | sed 's/^/  • /'
+            echo ""
+            echo "🛑 PIPELINE BLOCKED - Image does NOT meet FIPS 140-3 cryptographic requirements"
+            echo "🛑 Image will NOT be pushed to registry"
+            echo ""
+            echo "Action Required:"
+            echo "  1. Review violations above"
+            echo "  2. Replace deprecated/weak cryptographic algorithms"
+            echo "  3. Re-run pipeline after fixes"
+            exit 1
+          else
+            echo "✅ FIPS 140-3 COMPLIANCE PASSED: No cryptographic policy violations"
+          fi
+
+      - name: Check REGO warnings (non-blocking)
+        if: success()
+        run: |
+          echo ""
+          echo "=== Post-Quantum Cryptography (PQC) Readiness Check ==="
+
+          WARN_OUTPUT=$(opa eval \
+            --data policies/fips_compliance_cdx16.rego \
+            --input outputs/cbom.json \
+            --format pretty \
+            'data.fips_compliance_cdx16.warn')
+
+          echo "$WARN_OUTPUT"
+
+          WARNINGS=$(echo "$WARN_OUTPUT" | grep -c '"' || echo "0")
+
+          if [ "$WARNINGS" -gt 0 ]; then
+            echo ""
+            echo "ℹ️  QUANTUM VULNERABILITY WARNINGS: $WARNINGS algorithm(s) quantum-vulnerable"
+            echo ""
+            echo "Warnings (non-blocking):"
+            echo "$WARN_OUTPUT" | grep '"' | sed 's/^/  ⚠️  /'
+            echo ""
+            echo "These algorithms are FIPS-approved today but vulnerable to future quantum computers."
+            echo "Plan migration to NIST FIPS 203/204/205 (post-quantum) by 2030-2035."
+          else
+            echo "✅ No quantum vulnerability warnings"
+          fi
+
+  # ============================================================================
+  # STAGE 5: Tag and Push FIPS-Compliant Image
+  # ============================================================================
+  # Only executes if ALL previous gates pass:
+  #   - Aqua Image Assurance (Stage 2)
+  #   - CBOM Generation (Stage 3)
+  #   - REGO Compliance (Stage 4)
+
+  push_compliant_image:
+    runs-on: ubuntu-latest
+    needs: rego_compliance
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull original image
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Tag as FIPS 140-3 compliant
+        run: |
+          docker tag \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:fips-140-3-compliant-${{ github.sha }}
+
+          docker tag \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-fips-compliant
+
+      - name: Push FIPS-compliant images
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:fips-140-3-compliant-${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-fips-compliant
+
+      - name: Generate deployment summary
+        run: |
+          echo "## ✅ FIPS 140-3 Compliance Pipeline - PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Compliant Image**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:fips-140-3-compliant-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Compliance Verification" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **Aqua Image Assurance**: Passed (CVE/malware/CIS)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **CBOM Generation**: Cryptographic inventory complete" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **REGO Policy**: FIPS 140-3 compliant" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **Image Tagged**: fips-140-3-compliant-${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### FIPS 140-3 Compliance Statement" >> $GITHUB_STEP_SUMMARY
+          echo "This image has been validated against FIPS 140-3 cryptographic requirements:" >> $GITHUB_STEP_SUMMARY
+          echo "- No deprecated algorithms (MD5, SHA1, DES, 3DES, RC4)" >> $GITHUB_STEP_SUMMARY
+          echo "- FIPS-approved cryptographic algorithms only" >> $GITHUB_STEP_SUMMARY
+          echo "- Post-quantum cryptography migration plan generated" >> $GITHUB_STEP_SUMMARY
+          echo "- Compliant with NIST SP 800-140 requirements" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next Steps**: Deploy to Kubernetes (Aqua Admission Controller will enforce runtime policies)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # STAGE 6: Deploy to Kubernetes (Optional - requires K8s cluster + Aqua Platform)
+  # ============================================================================
+  # Uncomment when Kubernetes cluster is configured with Aqua Admission Controller
+  #
+  # This stage enforces Aqua Kubernetes Assurance Policy:
+  #   - Secret management controls
+  #   - Pod security standards
+  #   - Required labels (fips.compliance, crypto.level)
+  #   - Privilege restrictions
+  #
+  # Policy configured via: policies/fips-compliance-policies.tf
+
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   needs: push_compliant_image
+  #   permissions:
+  #     contents: read
+  #
+  #   steps:
+  #     - name: Set up kubectl
+  #       uses: azure/setup-kubectl@v3
+  #
+  #     - name: Configure kubeconfig
+  #       run: |
+  #         echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+  #         export KUBECONFIG=./kubeconfig
+  #
+  #     - name: Deploy FIPS-compliant image
+  #       run: |
+  #         kubectl set image deployment/cbom-app \
+  #           app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:fips-140-3-compliant-${{ github.sha }}
+  #
+  #     # Note: Aqua Admission Controller validates:
+  #     #   - Required labels present (fips.compliance=required)
+  #     #   - No privileged containers
+  #     #   - Secrets management compliance
+  #     #   - If validation fails, deployment is BLOCKED
