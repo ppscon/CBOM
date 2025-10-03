@@ -94,6 +94,7 @@ jobs:
       security-events: write
 
     env:
+      DOCKER_AUTH_CONFIG: ${{ secrets.DOCKER_AUTH_CONFIG }}
       IMAGE_TAG: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
     steps:
@@ -102,12 +103,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Log in to Aqua Registry
-        uses: docker/login-action@v3
-        with:
-          registry: registry.aquasec.com
-          username: ${{ secrets.AQUA_USER }}
-          password: ${{ secrets.AQUA_PASSWORD }}
+      - name: Configure Docker authentication
+        run: |
+          mkdir -p $HOME/.docker
+          echo "$DOCKER_AUTH_CONFIG" > $HOME/.docker/config.json
 
       - name: Pull Aqua Scanner image
         run: docker pull registry.aquasec.com/scanner:2506.2.10
