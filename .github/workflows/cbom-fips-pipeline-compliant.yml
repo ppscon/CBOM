@@ -1,35 +1,26 @@
-name: CBOM FIPS 140-3 Compliance Pipeline (Aqua Scanner)
+name: CBOM FIPS 140-3 Compliant Pipeline (PASS Demo)
 
-# FIPS 140-3 Compliant Pipeline Architecture
-# Implements workflow from: docs/REGO Policy Narration for FIPS 140-3 Compliance.md
+# FIPS 140-3 Compliant Pipeline - SUCCESS PATH
+# This pipeline demonstrates a COMPLIANT image passing all security gates
 #
-# Workflow Order (Critical):
-#   1. Build Image
-#   2. Aqua Image Assurance (CVE/malware/CIS) → FAIL stops pipeline
-#   3. CBOM Generation (crypto detection) → Only if #2 passes
-#   4. REGO Policy Evaluation (GO/NO-GO) → FAIL blocks push
-#   5. Push Compliant Image → Only if all pass
-#   6. (Optional) Deploy to Kubernetes → Aqua Admission Controller
+# Workflow Order:
+#   1. Build Minimal Compliant Image (Dockerfile.compliant)
+#   2. Aqua Image Assurance → PASS (minimal attack surface)
+#   3. CBOM Generation → PASS (no crypto libraries)
+#   4. REGO Policy Evaluation → PASS (no deprecated algorithms)
+#   5. Push Compliant Image → SUCCESS ✅
 #
-# Required Secrets (set when Aqua instance is ready):
-#   - AQUA_SERVER: Aqua tenant URL
-#   - AQUA_TOKEN: Scanner authentication token
-#   - AQUA_KEY: API key for SBOM generation
-#   - AQUA_SECRET: API secret for SBOM generation
-#   - DOCKER_AUTH_CONFIG: Docker registry auth (for pulling Aqua scanner)
+# Compare with: cbom-fips-pipeline-aqua.yml (FAIL demo with juice-shop)
 
 on:
-  push:
-    branches: [master, develop]
-  pull_request:
-    branches: [master]
   workflow_dispatch:
+  # Manually triggered for demo purposes
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ppscon/cbom
-  # Demo: Scan juice-shop for CBOM (has crypto findings)
-  SCAN_TARGET: bkimminich/juice-shop:latest
+  IMAGE_NAME: ppscon/cbom-compliant
+  # Scan our own minimal image (no crypto libraries)
+  SCAN_TARGET: ghcr.io/ppscon/cbom-compliant:${{ github.sha }}
 
 jobs:
   # ============================================================================
@@ -55,15 +46,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push application image
+      - name: Build and push compliant image
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile.compliant
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           labels: |
+            fips.compliance=required
+            crypto.level=fips-140-3
             com.aqua.security.policy=fips-140-3-compliant
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -128,7 +122,6 @@ jobs:
 
       - name: Run Aqua Security Scan
         id: aqua_scan
-        continue-on-error: true
         run: |
           mkdir -p artifacts
           docker run --rm \
@@ -307,7 +300,6 @@ jobs:
 
       - name: Evaluate REGO policy (FIPS 140-3 compliance)
         id: rego_eval
-        continue-on-error: true
         run: |
           echo "=== FIPS 140-3 Cryptographic Compliance Check ==="
 
