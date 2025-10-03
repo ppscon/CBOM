@@ -95,7 +95,7 @@ jobs:
 
     env:
       DOCKER_AUTH_CONFIG: ${{ secrets.DOCKER_AUTH_CONFIG }}
-      IMAGE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+      IMAGE_TAG: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
     steps:
       - name: Checkout repository
@@ -170,7 +170,7 @@ jobs:
       packages: read
 
     env:
-      IMAGE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+      IMAGE_TAG: ghcr.io/${{ github.repository }}:${{ github.sha }}
 
     steps:
       - name: Checkout repository
