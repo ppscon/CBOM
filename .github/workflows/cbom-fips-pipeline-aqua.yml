@@ -27,7 +27,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ppscon/cbom
+  IMAGE_NAME: ${{ github.repository }}
   # Demo: Scan juice-shop for CBOM (has crypto findings)
   SCAN_TARGET: bkimminich/juice-shop:latest
 
