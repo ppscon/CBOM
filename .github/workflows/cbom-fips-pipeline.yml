@@ -1,0 +1,348 @@
+name: CBOM FIPS Compliance Pipeline
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  ENHANCED_SCANNER_IMAGE: ghcr.io/${{ github.repository }}/enhanced-scanner
+
+jobs:
+  # ============================================================================
+  # STAGE 1: Build Application Image
+  # ============================================================================
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=,format=short
+            type=ref,event=branch
+            type=ref,event=pr
+
+      - name: Build and push application image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================================
+  # STAGE 2: Aqua Image Assurance (Optional - uses Trivy as fallback)
+  # ============================================================================
+  # NOTE: In production with Aqua Platform, this job would use Aqua Scanner
+  # For demo/OSS usage, we rely on Trivy scan within enhanced-scanner (next job)
+
+  aqua_image_assurance:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      # In production, uncomment this for Aqua Scanner:
+      # - name: Aqua Scanner
+      #   uses: docker://registry.aquasec.com/scanner:2022.4
+      #   env:
+      #     AQUA_SERVER: ${{ secrets.AQUA_SERVER }}
+      #     AQUA_TOKEN: ${{ secrets.AQUA_TOKEN }}
+      #   with:
+      #     args: scan --register ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  # ============================================================================
+  # STAGE 3: Build Enhanced Scanner (Trivy + Aqua-CBOM wrapper)
+  # ============================================================================
+  build_enhanced_scanner:
+    runs-on: ubuntu-latest
+    needs: aqua_image_assurance
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build aqua-cbom binary for Linux
+        run: |
+          cd scanner
+          env GOOS=linux GOARCH=amd64 go build -o ../aqua-cbom .
+          cd ..
+          chmod +x aqua-cbom
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push enhanced scanner
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ env.ENHANCED_SCANNER_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ============================================================================
+  # STAGE 4: Generate CBOM with PQC Migration Planning
+  # ============================================================================
+  cbom_generation:
+    runs-on: ubuntu-latest
+    needs: build_enhanced_scanner
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout repository (for policies)
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull enhanced scanner
+        run: docker pull ${{ env.ENHANCED_SCANNER_IMAGE }}:${{ github.sha }}
+
+      - name: Generate CBOM with migration planning
+        run: |
+          mkdir -p outputs
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v ${{ github.workspace }}/outputs:/out \
+            -e CBOM_OUTPUT_FILE=/out/cbom.json \
+            -e CBOM_CDX_TARGET=1.6 \
+            -e CBOM_GENERATE_MIGRATION_PLAN=true \
+            -e CBOM_MIGRATION_CONTEXT=edge_ingress \
+            -e CBOM_MIGRATION_TIMELINE=2025-Q2 \
+            ${{ env.ENHANCED_SCANNER_IMAGE }}:${{ github.sha }} \
+            --CBOM image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Generate CBOM CSV report
+        run: |
+          if [ -f outputs/cbom.json ]; then
+            ./aqua-cbom-csv.sh outputs/cbom.json --output outputs/cbom.csv
+          fi
+
+      - name: Upload CBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cbom-reports
+          path: |
+            outputs/cbom.json
+            outputs/cbom.csv
+          retention-days: 90
+
+  # ============================================================================
+  # STAGE 5: REGO Policy Evaluation (GO/NO-GO Gate)
+  # ============================================================================
+  rego_compliance:
+    runs-on: ubuntu-latest
+    needs: cbom_generation
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download CBOM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cbom-reports
+          path: outputs
+
+      - name: Install OPA
+        run: |
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+          chmod +x opa
+          sudo mv opa /usr/local/bin/
+
+      - name: Validate REGO policy syntax
+        run: |
+          opa fmt --fail policies/fips-compliance-cdx16.rego
+
+      - name: Evaluate REGO policy (blocking violations)
+        id: rego_eval
+        run: |
+          echo "=== REGO Policy Evaluation ==="
+
+          # Check for deny violations (blocking)
+          DENY_OUTPUT=$(./opa eval \
+            --data policies/fips-compliance-cdx16.rego \
+            --input outputs/cbom.json \
+            --format pretty \
+            'data.fips_compliance_cdx16.deny')
+
+          echo "$DENY_OUTPUT"
+
+          # Count violations
+          VIOLATIONS=$(echo "$DENY_OUTPUT" | grep -c '"' || echo "0")
+
+          if [ "$VIOLATIONS" -gt 0 ]; then
+            echo "❌ REGO Policy FAILED: $VIOLATIONS violation(s) found"
+            echo "violations=$VIOLATIONS" >> $GITHUB_OUTPUT
+            exit 1
+          else
+            echo "✅ REGO Policy PASSED: No blocking violations"
+            echo "violations=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check REGO warnings (non-blocking)
+        if: success()
+        run: |
+          echo "=== REGO Policy Warnings (Non-blocking) ==="
+
+          WARN_OUTPUT=$(./opa eval \
+            --data policies/fips-compliance-cdx16.rego \
+            --input outputs/cbom.json \
+            --format pretty \
+            'data.fips_compliance_cdx16.warn')
+
+          echo "$WARN_OUTPUT"
+
+          # Warnings don't fail the pipeline, but are logged
+          WARNINGS=$(echo "$WARN_OUTPUT" | grep -c '"' || echo "0")
+          echo "ℹ️  Found $WARNINGS warning(s) (quantum-vulnerable algorithms, etc.)"
+
+  # ============================================================================
+  # STAGE 6: Tag and Push Compliant Image
+  # ============================================================================
+  push_compliant_image:
+    runs-on: ubuntu-latest
+    needs: rego_compliance
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull original image
+        run: docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Tag as FIPS-compliant
+        run: |
+          docker tag \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:fips-compliant-${{ github.sha }}
+
+          docker tag \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-compliant
+
+      - name: Push compliant images
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:fips-compliant-${{ github.sha }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-compliant
+
+      - name: Generate deployment summary
+        run: |
+          echo "## ✅ CBOM FIPS Compliance Pipeline - PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Compliant Image**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:fips-compliant-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pipeline Stages" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Image Build" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Image Assurance (Trivy)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ CBOM Generation" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ REGO Policy Compliance" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Tagged and Pushed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next Steps**: Deploy to Kubernetes (Aqua Admission Controller will enforce K8s policies)" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # STAGE 7: Deploy to Kubernetes (Optional - requires K8s cluster)
+  # ============================================================================
+  # Uncomment when you have Kubernetes cluster configured
+
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   needs: push_compliant_image
+  #   permissions:
+  #     contents: read
+  #
+  #   steps:
+  #     - name: Set up kubectl
+  #       uses: azure/setup-kubectl@v3
+  #
+  #     - name: Configure kubeconfig
+  #       run: |
+  #         echo "${{ secrets.KUBECONFIG }}" | base64 -d > kubeconfig
+  #         export KUBECONFIG=./kubeconfig
+  #
+  #     - name: Deploy to Kubernetes
+  #       run: |
+  #         kubectl set image deployment/demo-app \
+  #           app=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:fips-compliant-${{ github.sha }}
+  #
+  #     # Note: Aqua Admission Controller will enforce K8s Assurance Policy here
+  #     # If policy fails, deployment will be blocked
