@@ -80,6 +80,7 @@ jobs:
     needs: build
     permissions:
       contents: read
+      packages: read
       security-events: write
 
     env:
