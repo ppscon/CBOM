@@ -1,0 +1,752 @@
+# Aqua-CBOM Migration Rules Configuration
+# Post-Quantum Cryptography Migration Planning
+#
+# Based on NIST PQC Standards (FIPS 203/204/205) and deployment context
+
+version: "1.0"
+last_updated: "2025-01-15"
+
+# ============================================
+# Migration Matrix: Current → Target Algorithms
+# ============================================
+migration_matrix:
+
+  # Key Establishment / Key Exchange
+  key_exchange:
+    ECDHE-P256:
+      target: "ML-KEM-768+ECDHE (hybrid)"
+      use_case: "Web applications, container platforms, general purpose"
+      priority: "high"
+      timeline: "2025-Q2"
+
+    ECDHE-P384:
+      target: "ML-KEM-1024+ECDHE (hybrid)"
+      use_case: "High-security environments"
+      priority: "high"
+      timeline: "2025-Q3"
+
+    ECDHE-P521:
+      target: "ML-KEM-1024+ECDHE (hybrid)"
+      use_case: "High-security, long-term protection"
+      priority: "medium"
+      timeline: "2025-Q4"
+
+    RSA-2048:
+      target: "ML-KEM-768"
+      use_case: "Legacy key exchange (where ECDHE not available)"
+      priority: "high"
+      timeline: "2025-Q2"
+
+    RSA-3072:
+      target: "ML-KEM-1024"
+      use_case: "High-security legacy systems"
+      priority: "medium"
+      timeline: "2025-Q3"
+
+    RSA-4096:
+      target: "ML-KEM-1024"
+      use_case: "Very high security"
+      priority: "low"
+      timeline: "2026-Q1"
+
+  # Digital Signatures
+  signatures:
+    ECDSA-P256:
+      target: "ML-DSA-65+ECDSA (hybrid)"
+      use_case: "General purpose, certificates, API auth"
+      priority: "high"
+      timeline: "2025-Q2"
+
+    ECDSA-P384:
+      target: "ML-DSA-87+ECDSA (hybrid)"
+      use_case: "High-security signatures"
+      priority: "high"
+      timeline: "2025-Q3"
+
+    ECDSA-P521:
+      target: "ML-DSA-87+ECDSA (hybrid)"
+      use_case: "Long-term signatures"
+      priority: "medium"
+      timeline: "2025-Q4"
+
+    RSA-2048:
+      target: "ML-DSA-65+RSA-2048 (hybrid)"
+      use_case: "Certificate signing, legacy PKI"
+      priority: "high"
+      timeline: "2025-Q2"
+
+    RSA-3072:
+      target: "ML-DSA-87+RSA-3072 (hybrid)"
+      use_case: "High-security signing"
+      priority: "medium"
+      timeline: "2025-Q3"
+
+    RSA-4096:
+      target: "ML-DSA-87+RSA-4096 (hybrid)"
+      use_case: "Very high security"
+      priority: "low"
+      timeline: "2026-Q1"
+
+    # Backup/diversity option
+    SLH-DSA-128f:
+      target: "Keep (hash-based diversity)"
+      use_case: "Backup where diversity needed, long-term signatures"
+      priority: "low"
+      timeline: "2026-Q2"
+
+  # Symmetric Encryption (lower quantum risk - Grover's algorithm)
+  symmetric:
+    AES-128:
+      target: "AES-256 (quantum-safe with larger key)"
+      use_case: "General purpose encryption"
+      priority: "low"
+      timeline: "2026-Q1"
+
+    AES-192:
+      target: "AES-256"
+      use_case: "Transition to AES-256"
+      priority: "low"
+      timeline: "2026-Q2"
+
+    AES-256:
+      target: "Keep (quantum-safe)"
+      use_case: "Already quantum-resistant"
+      priority: "none"
+      timeline: "N/A"
+
+    3DES:
+      target: "AES-256"
+      use_case: "URGENT: 3DES already deprecated"
+      priority: "critical"
+      timeline: "2025-Q1"
+
+    DES:
+      target: "AES-256"
+      use_case: "URGENT: DES broken"
+      priority: "critical"
+      timeline: "2025-Q1"
+
+  # Hashing (lower quantum risk - Grover's algorithm)
+  hashing:
+    SHA-256:
+      target: "SHA3-256 or Keep SHA-256"
+      use_case: "Quantum-safe enough (128-bit security after Grover's)"
+      priority: "low"
+      timeline: "2026-Q2"
+
+    SHA-384:
+      target: "SHA3-384 or Keep SHA-384"
+      use_case: "Quantum-safe"
+      priority: "low"
+      timeline: "2026-Q3"
+
+    SHA-512:
+      target: "Keep (quantum-safe)"
+      use_case: "Already quantum-resistant"
+      priority: "none"
+      timeline: "N/A"
+
+    SHA-1:
+      target: "SHA-256 or SHA3-256"
+      use_case: "URGENT: SHA-1 broken"
+      priority: "critical"
+      timeline: "2025-Q1"
+
+    MD5:
+      target: "SHA-256 or SHA3-256"
+      use_case: "URGENT: MD5 broken"
+      priority: "critical"
+      timeline: "2025-Q1"
+
+# ============================================
+# Deployment Context: Caveats and Mitigations
+# ============================================
+deployment_contexts:
+
+  edge_ingress:
+    description: "CDN, ALB, Nginx Ingress, public-facing endpoints"
+    caveats:
+      - tls13_client_gap
+      - middlebox_strip
+      - pki_no_pqc
+      - cert_size_large
+      - mtu_risk
+    mitigations:
+      - dual_listener
+      - edge_first
+      - short_chain
+      - session_resumption
+      - sni_routing
+      - capacity_bump
+    readiness_level: "pilot-ready"
+
+  service_mesh:
+    description: "Istio, Linkerd, internal mTLS"
+    caveats:
+      - mesh_not_ready
+      - library_plugin_required
+      - mtls_gap
+      - handshake_cost_high
+    mitigations:
+      - canary_namespace
+      - mesh_bypass
+      - classical_internal_first
+      - gradual_rollout
+    readiness_level: "not-ready"
+
+  internal_api:
+    description: "Backend service-to-service communication"
+    caveats:
+      - library_not_ready
+      - hsm_gap
+      - performance_impact
+    mitigations:
+      - software_keys_acceptable
+      - crypto_zoning
+      - feature_flag
+    readiness_level: "pilot-ready"
+
+  database_tls:
+    description: "Database connection encryption"
+    caveats:
+      - library_not_ready
+      - driver_gap
+      - perf_critical
+    mitigations:
+      - classical_only_for_now
+      - plan_future_upgrade
+    readiness_level: "not-ready"
+
+  image_signing:
+    description: "Container image signatures (Sigstore, cosign, Notation)"
+    caveats:
+      - image_signing_gap
+      - admission_policy_gap
+      - tooling_not_ready
+    mitigations:
+      - hybrid_signing
+      - shadow_issuance
+      - dual_verify
+    readiness_level: "pilot-ready"
+
+  iot_embedded:
+    description: "Constrained devices, embedded systems"
+    caveats:
+      - cpu_limited
+      - memory_limited
+      - wire_size_critical
+    mitigations:
+      - use_ml_kem_512
+      - use_ml_dsa_44
+      - optimize_chain
+    readiness_level: "not-ready"
+
+  high_security:
+    description: "High-security environments, long-term protection"
+    caveats:
+      - hsm_gap
+      - fips_validation_pending
+      - regulatory_unclear
+    mitigations:
+      - use_ml_kem_1024
+      - use_ml_dsa_87
+      - hybrid_with_classical_hsm
+      - document_waiver
+    readiness_level: "pilot-ready"
+
+# ============================================
+# Caveat Definitions
+# ============================================
+caveats:
+
+  # Standards & Protocol
+  tls13_client_gap:
+    category: "protocol"
+    description: "Some clients don't support TLS 1.3"
+    impact: "Must maintain TLS 1.2 fallback listener"
+    severity: "medium"
+
+  protocol_not_ready:
+    category: "protocol"
+    description: "Protocol specification still in draft"
+    impact: "Risk of breaking changes before finalization"
+    severity: "high"
+
+  fallback_required:
+    category: "protocol"
+    description: "Must maintain classical protocol fallback"
+    impact: "Increased complexity and attack surface"
+    severity: "low"
+
+  # PKI & Certificates
+  pki_no_pqc:
+    category: "pki"
+    description: "Certificate Authority doesn't issue PQC certificates yet"
+    impact: "Cannot obtain pure PQC certs, must use hybrid or wait"
+    severity: "high"
+
+  cert_size_large:
+    category: "pki"
+    description: "PQC certificates are significantly larger (ML-DSA ~3KB, SLH-DSA ~8KB)"
+    impact: "Handshake size increases, may cause fragmentation"
+    severity: "medium"
+
+  chain_too_long:
+    category: "pki"
+    description: "Certificate chain length pushes handshake over path MTU"
+    impact: "Fragmentation on mobile/IoT, latency increase"
+    severity: "medium"
+
+  mtu_risk:
+    category: "pki"
+    description: "Handshake may exceed 1500 byte MTU on mobile networks"
+    impact: "Packet fragmentation, potential delivery failures"
+    severity: "medium"
+
+  mtls_gap:
+    category: "pki"
+    description: "mTLS client certificate flow not PQC-ready"
+    impact: "Cannot use PQC for mutual TLS authentication"
+    severity: "high"
+
+  # Performance
+  handshake_cost_high:
+    category: "performance"
+    description: "Handshake latency increases 15-20%"
+    impact: "User-visible latency on slow connections"
+    severity: "medium"
+
+  cpu_overhead:
+    category: "performance"
+    description: "CPU usage increases 5-10% for cryptographic operations"
+    impact: "May require pod resizing, autoscaling adjustments"
+    severity: "low"
+
+  memory_footprint:
+    category: "performance"
+    description: "Memory usage increases for key storage"
+    impact: "Affects pod memory limits"
+    severity: "low"
+
+  wire_size_large:
+    category: "performance"
+    description: "Network bandwidth usage increases 2-3KB per handshake"
+    impact: "Costs increase in bandwidth-limited environments"
+    severity: "low"
+
+  cpu_limited:
+    category: "performance"
+    description: "Device has limited CPU for crypto operations"
+    impact: "May not support full PQC, need smaller variants"
+    severity: "high"
+
+  memory_limited:
+    category: "performance"
+    description: "Device has limited RAM"
+    impact: "Cannot store larger PQC keys"
+    severity: "high"
+
+  wire_size_critical:
+    category: "performance"
+    description: "Bandwidth extremely limited (IoT, satellite)"
+    impact: "PQC handshakes may be prohibitive"
+    severity: "high"
+
+  # Library & Runtime Support
+  library_not_ready:
+    category: "library"
+    description: "TLS stack doesn't support PQC algorithms yet"
+    impact: "Cannot enable PQC until library upgraded"
+    severity: "high"
+
+  plugin_required:
+    category: "library"
+    description: "Requires provider plugin installation (e.g., OpenSSL provider)"
+    impact: "Additional deployment complexity"
+    severity: "low"
+
+  hsm_gap:
+    category: "library"
+    description: "HSM/KMS doesn't support PQC key operations"
+    impact: "Keys must live in software, not hardware"
+    severity: "high"
+
+  software_keys_only:
+    category: "library"
+    description: "PQC keys can only be stored in software"
+    impact: "Reduced security vs HSM-backed keys"
+    severity: "medium"
+
+  driver_gap:
+    category: "library"
+    description: "Database driver doesn't support PQC"
+    impact: "Cannot upgrade database connections"
+    severity: "high"
+
+  # Interoperability
+  middlebox_strip:
+    category: "interop"
+    description: "Corporate proxies or WAFs strip PQC TLS extensions"
+    impact: "Handshake falls back to classical, defeating PQC"
+    severity: "high"
+
+  mesh_not_ready:
+    category: "interop"
+    description: "Service mesh (Istio/Linkerd) cannot handle PQC"
+    impact: "Cannot enable PQC for mesh-encrypted traffic"
+    severity: "high"
+
+  loadbalancer_gap:
+    category: "interop"
+    description: "Load balancer terminates TLS and drops PQC"
+    impact: "PQC only works at edge, not through LB"
+    severity: "medium"
+
+  # Supply Chain & Tooling
+  image_signing_gap:
+    category: "supply_chain"
+    description: "Image signing tools (cosign, Notation) don't support PQC signatures"
+    impact: "Cannot sign images with PQC algorithms"
+    severity: "medium"
+
+  admission_policy_gap:
+    category: "supply_chain"
+    description: "Admission controller cannot verify PQC signatures"
+    impact: "Cannot enforce PQC-signed image requirement"
+    severity: "medium"
+
+  tooling_not_ready:
+    category: "supply_chain"
+    description: "CI/CD tooling doesn't support PQC"
+    impact: "Manual workarounds required"
+    severity: "low"
+
+  # Observability
+  tooling_cant_parse:
+    category: "observability"
+    description: "Packet capture and IDS tools cannot parse PQC handshakes"
+    impact: "Reduced visibility for troubleshooting and security monitoring"
+    severity: "medium"
+
+  fingerprinting_breaks:
+    category: "observability"
+    description: "TLS fingerprinting (JA3) doesn't recognize PQC ciphers"
+    impact: "Security analytics and bot detection may fail"
+    severity: "low"
+
+  # Compliance
+  fips_validation_pending:
+    category: "compliance"
+    description: "FIPS 140-3 certificate doesn't cover PQC algorithms yet"
+    impact: "Cannot use PQC in FIPS-required environments until validated"
+    severity: "high"
+
+  regulatory_unclear:
+    category: "compliance"
+    description: "Regulatory guidance for PQC not finalized"
+    impact: "Risk of non-compliance if regulations change"
+    severity: "medium"
+
+# ============================================
+# Mitigation Strategies
+# ============================================
+mitigations:
+
+  # Dual-Stack Approaches
+  dual_listener:
+    category: "dual_stack"
+    description: "Run classical and PQC listeners in parallel"
+    effort: "2 weeks"
+    complexity: "medium"
+
+  hybrid_mode:
+    category: "dual_stack"
+    description: "Use hybrid cryptography (classical + PQC in same handshake)"
+    effort: "1 week"
+    complexity: "low"
+
+  feature_flag:
+    category: "dual_stack"
+    description: "Control PQC enablement via configuration flag"
+    effort: "1 week"
+    complexity: "low"
+
+  gradual_rollout:
+    category: "dual_stack"
+    description: "Shift traffic percentage gradually (1% → 25% → 50% → 100%)"
+    effort: "Ongoing"
+    complexity: "low"
+
+  # Architectural Strategies
+  edge_first:
+    category: "architecture"
+    description: "Deploy PQC at public edge/CDN before internal systems"
+    effort: "2 weeks"
+    complexity: "medium"
+
+  edge_only:
+    category: "architecture"
+    description: "Keep PQC at edge, maintain classical inside mesh"
+    effort: "1 week"
+    complexity: "low"
+
+  canary_namespace:
+    category: "architecture"
+    description: "Test PQC in isolated Kubernetes namespace"
+    effort: "1 week"
+    complexity: "low"
+
+  mesh_bypass:
+    category: "architecture"
+    description: "Skip service mesh for PQC-enabled services"
+    effort: "2 weeks"
+    complexity: "high"
+
+  classical_internal_first:
+    category: "architecture"
+    description: "Keep internal systems classical while transitioning edge"
+    effort: "Ongoing"
+    complexity: "low"
+
+  # Performance Optimizations
+  session_resumption:
+    category: "performance"
+    description: "Use TLS session tickets aggressively to amortize handshake cost"
+    effort: "1 week"
+    complexity: "low"
+
+  short_chain:
+    category: "performance"
+    description: "Minimize certificate chain to 2 certs maximum"
+    effort: "1 week"
+    complexity: "low"
+
+  capacity_bump:
+    category: "performance"
+    description: "Increase pod CPU/memory requests by 10-15%"
+    effort: "1 day"
+    complexity: "low"
+
+  hpa_tuning:
+    category: "performance"
+    description: "Adjust autoscaling for PQC handshake load patterns"
+    effort: "1 week"
+    complexity: "medium"
+
+  use_ml_kem_512:
+    category: "performance"
+    description: "Use smaller ML-KEM-512 for constrained environments"
+    effort: "1 week"
+    complexity: "low"
+
+  use_ml_dsa_44:
+    category: "performance"
+    description: "Use smaller ML-DSA-44 for IoT/embedded"
+    effort: "1 week"
+    complexity: "low"
+
+  use_ml_kem_1024:
+    category: "performance"
+    description: "Use larger ML-KEM-1024 for high-security"
+    effort: "1 week"
+    complexity: "low"
+
+  use_ml_dsa_87:
+    category: "performance"
+    description: "Use larger ML-DSA-87 for high-security signatures"
+    effort: "1 week"
+    complexity: "low"
+
+  optimize_chain:
+    category: "performance"
+    description: "Optimize certificate chain for size"
+    effort: "1 week"
+    complexity: "medium"
+
+  # PKI Management
+  cross_sign:
+    category: "pki"
+    description: "Use ECDSA cross-signing during transition"
+    effort: "2 weeks"
+    complexity: "medium"
+
+  hybrid_cert:
+    category: "pki"
+    description: "Use certificate with both classical + PQC signatures"
+    effort: "1 week"
+    complexity: "low"
+
+  acme_pilot:
+    category: "pki"
+    description: "Test ACME certificate issuance with PQC in staging"
+    effort: "1 week"
+    complexity: "low"
+
+  shadow_issuance:
+    category: "pki"
+    description: "Issue PQC certificates in parallel for testing (don't use in prod yet)"
+    effort: "1 week"
+    complexity: "low"
+
+  # Interoperability
+  sni_routing:
+    category: "interop"
+    description: "Route PQC traffic by SNI or user-agent headers"
+    effort: "2 weeks"
+    complexity: "medium"
+
+  proxy_config:
+    category: "interop"
+    description: "Configure middleboxes to pass through PQC extensions"
+    effort: "1 week"
+    complexity: "medium"
+
+  # HSM/KMS Management
+  crypto_zoning:
+    category: "hsm"
+    description: "Define zones where software keys are acceptable vs HSM required"
+    effort: "1 week"
+    complexity: "low"
+
+  hybrid_with_classical_hsm:
+    category: "hsm"
+    description: "Keep classical keys in HSM, PQC keys in software (hybrid mode)"
+    effort: "2 weeks"
+    complexity: "medium"
+
+  software_keys_acceptable:
+    category: "hsm"
+    description: "Document acceptance of software-based PQC keys for this service"
+    effort: "1 day"
+    complexity: "low"
+
+  plan_future_upgrade:
+    category: "hsm"
+    description: "Document plan for future HSM-backed PQC migration"
+    effort: "1 day"
+    complexity: "low"
+
+  # Testing & Validation
+  synthetic_probes:
+    category: "testing"
+    description: "Add monitoring probes for PQC endpoints"
+    effort: "1 week"
+    complexity: "low"
+
+  traffic_mirror:
+    category: "testing"
+    description: "Mirror production traffic to PQC test environment"
+    effort: "2 weeks"
+    complexity: "medium"
+
+  client_testing:
+    category: "testing"
+    description: "Test with matrix of client types (browsers, mobile, enterprise)"
+    effort: "2 weeks"
+    complexity: "medium"
+
+  # Supply Chain
+  hybrid_signing:
+    category: "supply_chain"
+    description: "Sign images with both classical and PQC signatures"
+    effort: "2 weeks"
+    complexity: "medium"
+
+  dual_verify:
+    category: "supply_chain"
+    description: "Verify both classical and PQC signatures in admission control"
+    effort: "2 weeks"
+    complexity: "medium"
+
+  # Fallback Strategies
+  classical_only_for_now:
+    category: "fallback"
+    description: "Keep classical algorithms, plan PQC for future phase"
+    effort: "0"
+    complexity: "none"
+
+  document_waiver:
+    category: "fallback"
+    description: "Document exception/waiver for PQC requirement"
+    effort: "1 day"
+    complexity: "low"
+
+# ============================================
+# Priority Levels
+# ============================================
+priority_levels:
+  critical:
+    description: "Immediate action required - algorithm already broken or RSA-1024"
+    timeline: "2025-Q1"
+    examples:
+      - MD5
+      - SHA-1
+      - DES
+      - 3DES
+      - RSA-1024
+
+  high:
+    description: "External-facing systems with quantum-vulnerable asymmetric crypto"
+    timeline: "2025-Q2 to Q3"
+    examples:
+      - RSA-2048 (public endpoints)
+      - ECDSA-P256 (API authentication)
+      - ECDHE-P256 (web TLS)
+
+  medium:
+    description: "Internal systems with quantum vulnerability or high-security external"
+    timeline: "2025-Q4 to 2026-Q1"
+    examples:
+      - RSA-3072
+      - Internal service mTLS
+      - Database connections
+
+  low:
+    description: "Symmetric crypto (Grover's only), internal low-sensitivity"
+    timeline: "2026-Q2+"
+    examples:
+      - AES-128
+      - SHA-256
+      - Internal logging
+
+  none:
+    description: "Already quantum-safe or no quantum risk"
+    timeline: "N/A"
+    examples:
+      - AES-256
+      - SHA-512
+      - SHA3 family
+
+# ============================================
+# Readiness Levels
+# ============================================
+readiness_levels:
+  not-ready:
+    description: "Blockers prevent migration (library support, HSM, compliance)"
+    action: "Document blockers, set future timeline"
+
+  pilot-ready:
+    description: "Can test in non-production (library support exists)"
+    action: "Start canary testing in dev/staging"
+
+  production-ready:
+    description: "Can deploy to production with mitigations (dual-stack)"
+    action: "Begin gradual rollout"
+
+  migrated:
+    description: "Already using PQC algorithm"
+    action: "Monitor and maintain"
+
+  hybrid-active:
+    description: "Currently running hybrid classical+PQC"
+    action: "Monitor performance, plan pure PQC transition"
+
+# ============================================
+# Output Configuration
+# ============================================
+output:
+  migration_plan_file: "aqua-cbom-migration-plan.json"
+  format_version: "1.0"
+  include_performance_estimates: true
+  include_effort_estimates: true
+  include_timeline_suggestions: true
