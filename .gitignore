@@ -1,60 +1,110 @@
-# Binaries
+# ============================================================================
+# Public CBOM Repository - .gitignore
+# ============================================================================
+# This repo contains ONLY the CBOM binary and essential usage files
+# All FIPS demo work, pipeline configs, policies stay LOCAL
+# ============================================================================
+
+# ============================================================================
+# SENSITIVE - NEVER COMMIT
+# ============================================================================
+cosign_keys/
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+.env
+*.token
+
+# ============================================================================
+# LOCAL ONLY - FIPS Demo Work (NOT for public repo)
+# ============================================================================
+FIPS-GUIDANCE/
+demo-deployments/
+policies/
+archive/
+research/
+.github/workflows/
+*.tfvars
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# All markdown except README
+*.md
+!README.md
+
+# All shell scripts except essentials
+*.sh
+!wrapper.sh
+!demo.sh
+!aqua-cbom-csv.sh
+
+# Cleanup and test scripts (local only)
+cleanup*.sh
+test-*.sh
+run-demo.sh
+setenv.sh
+qvs-cbom-csv.sh
+json-to-csv.sh
+
+# Dockerfiles except main one
+Dockerfile.*
+!Dockerfile
+
+# YAML files (Kubernetes/demo manifests - local only)
+*.yaml
+*.yml
+
+# ============================================================================
+# Build Artifacts & Outputs
+# ============================================================================
+demo-outputs/
+outputs/
+*.json
+!package.json
+*.csv
+*.log
+test_*
+
+# ============================================================================
+# IDE & OS
+# ============================================================================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.claude/
+.mcp.json
+*.swp
+*.swo
+*~
+
+# ============================================================================
+# Go Build (if building from source)
+# ============================================================================
+vendor/
+go.sum
 *.exe
 *.dll
 *.so
 *.dylib
+cmd/
+pkg/
+internal/
+ci_scripts/
 
-# Test files and outputs
-test_*
-*.log
-demo-outputs/
-outputs/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Documentation (managed outside the repo)
-docs/
-*.md
-!README.md
-!DEMO-GUIDE.md
-
-# IDE and development
-.idea/
-.claude/
-.mcp.json
-
-# Terraform and infrastructure
-*.tf
-*.tfstate
-*.tfstate.backup
-.terraform/
-terraform.tfvars
-variables.tf
-imports.tf
-main.tf
-setenv.sh
-
-# Policies and workflows (internal only)
-policies/*.tf
-policies/variables.tf
-# Note: .github/workflows/ is NOT ignored - those are pipeline definitions
-
-# Kubernetes manifests (internal testing)
-k8s-demo-workloads*.yaml
-
-# Build artifacts
-*.json
-!package.json
-*.csv
-
-# Scripts (keep only essentials)
-demo-validate.sh
-test-*.sh
-json-to-csv.sh
-docker-run-csv.sh
-cleanup.sh
-
-# Validation tools
-tools/
+# ============================================================================
+# What SHOULD be committed (for reference)
+# ============================================================================
+# ✅ aqua-cbom (Linux binary)
+# ✅ aqua-cbom-darwin (macOS binary)
+# ✅ wrapper.sh (Trivy integration)
+# ✅ Dockerfile (Docker wrapper)
+# ✅ demo.sh (demo script)
+# ✅ aqua-cbom-csv.sh (CSV generation)
+# ✅ README.md (usage guide)
