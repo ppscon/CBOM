@@ -27,7 +27,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ppscon/cbom-fips-demo
   # Demo: Scan juice-shop for CBOM (has crypto findings)
   SCAN_TARGET: bkimminich/juice-shop:latest
 
@@ -84,7 +84,7 @@ jobs:
 
     env:
       DOCKER_AUTH_CONFIG: ${{ secrets.DOCKER_AUTH_CONFIG }}
-      IMAGE_TAG: ghcr.io/ppscon/cbom:${{ github.sha }}
+      IMAGE_TAG: ghcr.io/ppscon/cbom-fips-demo:${{ github.sha }}
 
     steps:
       - name: Checkout repository
