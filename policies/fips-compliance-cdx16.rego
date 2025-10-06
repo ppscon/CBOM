@@ -23,20 +23,20 @@ weak_key_lengths := {
 }
 
 # DENY rules - pipeline blocking violations
-deny[msg] {
+deny contains msg if {
     asset := input.cryptographicAssets[_]
     severity := deprecated_algorithms[asset.algorithm]
     msg := sprintf("FIPS VIOLATION: %s algorithm detected (%s severity) - deprecated and insecure", [asset.algorithm, severity])
 }
 
-deny[msg] {
+deny contains msg if {
     asset := input.cryptographicAssets[_]
     asset.algorithm == "RSA"
     asset.keyLength < 2048
     msg := sprintf("FIPS VIOLATION: RSA key length %d < 2048 bits (minimum required)", [asset.keyLength])
 }
 
-deny[msg] {
+deny contains msg if {
     asset := input.cryptographicAssets[_]
     asset.algorithm == "ECDSA"
     asset.keyLength < 256
@@ -44,7 +44,7 @@ deny[msg] {
 }
 
 # WARN rules - non-blocking warnings
-warn[msg] {
+warn contains msg if {
     asset := input.cryptographicAssets[_]
     asset.algorithm == "RSA"
     asset.keyLength >= 2048
@@ -52,7 +52,7 @@ warn[msg] {
     msg := sprintf("WARNING: RSA %d-bit keys are quantum-vulnerable. Migrate to PQC.", [asset.keyLength])
 }
 
-warn[msg] {
+warn contains msg if {
     asset := input.cryptographicAssets[_]
     contains(asset.algorithm, "SHA-2")
     msg := sprintf("WARNING: %s is quantum-vulnerable. Consider SHA-3 or CRYSTALS.", [asset.algorithm])
