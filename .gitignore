@@ -108,3 +108,7 @@ ci_scripts/
 # ✅ demo.sh (demo script)
 # ✅ aqua-cbom-csv.sh (CSV generation)
 # ✅ README.md (usage guide)
+
+# Terraform credential files (SENSITIVE)
+variables.tf
+terraform.tfvars
