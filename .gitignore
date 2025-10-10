@@ -59,6 +59,7 @@ Dockerfile.*
 # YAML files (Kubernetes/demo manifests - local only)
 *.yaml
 *.yml
+!migration-rules.yaml
 
 # ============================================================================
 # Build Artifacts & Outputs
@@ -107,7 +108,9 @@ ci_scripts/
 # ✅ Dockerfile (Docker wrapper)
 # ✅ demo.sh (demo script)
 # ✅ aqua-cbom-csv.sh (CSV generation)
+# ✅ migration-rules.yaml (PQC migration configuration)
 # ✅ README.md (usage guide)
+# ✅ .gitignore (protection)
 
 # Terraform credential files (SENSITIVE)
 variables.tf
